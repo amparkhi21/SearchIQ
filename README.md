@@ -1,81 +1,236 @@
-# SearchIQ
+# 🛍️ SearchIQ — AI Product Search Engine
 
-AI-powered full-stack e-commerce/search platform.
+**Search Smarter. Find Better.**
 
-## Current backend phases
+SearchIQ is an AI-powered e-commerce product discovery platform designed to help users find relevant products using natural-language queries and semantic search. Instead of relying only on exact keyword matching, the platform aims to understand the meaning and intent behind a user's search to deliver more relevant product results.
 
-- Phase 2: Authentication & User Management — verified
-- Phase 3: Product Catalog — verified with 51/51 live smoke checks
-- Phase 4: Python AI service — implemented; run the local integration test after building the AI container
+Built with a modern full-stack architecture, SearchIQ combines web development, artificial intelligence, search technology, caching, and cloud-ready infrastructure.
 
-## Local development
+> **Project Status:** 🚧 In Development
 
-### Start services
+## 📌 Problem Statement
 
-```powershell
-docker compose up -d
+Traditional e-commerce search engines often depend on exact keywords, making it difficult for users to find products when they describe their requirements in natural language.
+
+For example, a user searching for "comfortable black shoes for college under ₹2500" may not know the exact product name or brand.
+
+SearchIQ aims to solve this problem through semantic search, natural-language query understanding, and intelligent product retrieval.
+
+## 💡 Proposed Solution
+
+SearchIQ combines AI-powered semantic search with a full-stack e-commerce platform to improve product discovery. Users can describe what they need in everyday language, refine the results using filters, and explore relevant products through a user-friendly interface.
+
+### Example Search
+
+**User Query:**
+`I need a laptop for coding and AI projects under ₹60000`
+
+**SearchIQ aims to identify:**
+- Product category: Laptop
+- Use case: Coding and AI development
+- Budget: Up to ₹60,000
+
+The search engine can then retrieve relevant products based on the available product data, semantic similarity, and applicable filters.
+
+## ✨ Key Features
+
+### 🔍 AI-Powered Product Search
+- Natural-language product queries
+- Semantic search using text embeddings
+- Hybrid search combining keyword matching and semantic retrieval
+- Search suggestions and autocomplete
+- Query understanding for attributes such as category, brand, color, and price
+- Product filtering, sorting, and relevance-based ranking
+
+### 🛒 E-Commerce Functionality
+- User registration and login
+- Product catalog and category browsing
+- Product details and specifications
+- Shopping cart and wishlist
+- Product comparison
+- Checkout and order management
+- Order history and tracking
+
+### 🤖 Intelligent Product Discovery
+- Similar product recommendations
+- Personalized product suggestions
+- Recently viewed products
+- Search history
+- AI-based product review summaries
+
+### 🔔 Notifications
+- Price-drop alerts
+- Back-in-stock notifications
+- Order status notifications
+
+### 🛡️ Admin Dashboard
+- Product and category management
+- Inventory management
+- Order management
+- Search analytics
+- Popular search tracking
+- Zero-result search analysis
+
+*Note: Features are being developed incrementally. This list describes the planned capabilities of the complete platform; not every feature is implemented yet.*
+
+## 🧰 Technology Stack
+
+| Technology | Purpose |
+|---|---|
+| React.js | Frontend user interface |
+| Vite | Frontend development and build tooling |
+| Tailwind CSS | Responsive UI styling |
+| Node.js | Backend runtime |
+| Express.js | REST API development |
+| MongoDB | Primary database |
+| Mongoose | MongoDB data modeling |
+| Python | AI service development |
+| FastAPI | AI service APIs |
+| Sentence Transformers | Semantic text embeddings |
+| OpenSearch | Full-text and vector search |
+| Redis | Caching and temporary data |
+| JWT | Authentication |
+| Docker | Containerization |
+| AWS | Planned cloud deployment |
+
+## 🏗️ System Architecture
+
+```text
+                   USER
+                    |
+                    v
+          React.js + Vite Frontend
+                    |
+                    v
+           Node.js + Express API
+                    |
+        +-----------+-----------+
+        |           |           |
+        v           v           v
+     MongoDB      Redis      FastAPI
+   Primary Data   Cache     AI Service
+                                |
+                                v
+                       Sentence Transformers
+                                |
+                                v
+                            OpenSearch
+                                |
+                                v
+                       Relevant Products
 ```
 
-The AI service is exposed at `http://localhost:8000` for local development. Its public API is protected with the `X-Internal-Key` header; the browser should use the Node API only.
+**Architecture principles:**
+- MongoDB acts as the primary source of product and user data.
+- Express.js handles public API requests and application logic.
+- FastAPI provides a separate service for AI-related processing.
+- Sentence Transformers generate embeddings for semantic search.
+- OpenSearch supports keyword and vector-based product retrieval.
+- Redis is intended to improve performance through caching.
 
-### Backend on the host
+### 1. Clone the Repository
+
+```bash
+git clone <YOUR_GITHUB_REPOSITORY_URL>
+cd SearchIQ
+```
+
+Replace `<YOUR_GITHUB_REPOSITORY_URL>` with your actual GitHub repository URL.
+
+### 2. Start the Infrastructure
+
+Ensure Docker Desktop is running, then execute these commands from the project root:
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+MongoDB, Redis, and OpenSearch should start and become healthy before you continue.
+
+### 3. Configure the Backend
+
+Open the backend directory:
+
+```bash
+cd backend
+```
+
+In PowerShell, create or update the environment file:
 
 ```powershell
-cd backend
-npm.cmd run seed:admin
-npm.cmd run seed:catalog
+Copy-Item .env.example .env -Force
+```
+
+Install the dependencies:
+
+```powershell
+npm.cmd install
+```
+
+### 4. Start the Backend
+
+```powershell
 npm.cmd run dev
 ```
 
-To replace the demo product photos with unique Unsplash photos, add your key to `backend/.env` as `UNSPLASH_ACCESS_KEY=...` (the legacy `ACCESS_KEY` name is also accepted), then run these from `backend`:
+The backend is configured to use port `5000` by default.
 
-```powershell
-npm.cmd run seed:images:unsplash
-npm.cmd run search:reindex -- --recreate
+### 5. Verify the Backend
+
+Once the server has started, open these URLs in your browser:
+
+| Endpoint | Purpose |
+|---|---|
+| `http://localhost:5000/api/v1/health` | Backend and dependency health check |
+| `http://localhost:5000/api/v1/health/live` | Application liveness check |
+| `http://localhost:5000/api/docs` | Swagger API documentation |
+
+The full health endpoint should report MongoDB, Redis, and OpenSearch status.
+
+**Note:** The commands above cover the Phase 1 backend foundation. The complete frontend, AI search service, and shopping workflows must be implemented and configured in their respective development phases before the whole platform can run.
+
+## 🔐 Environment Variables
+
+The backend uses environment variables for configuration. Common variables include:
+
+```env
+NODE_ENV=development
+PORT=5000
+
+MONGO_URI=mongodb://localhost:27017/searchiq
+REDIS_URL=redis://localhost:6379
+OPENSEARCH_NODE=http://localhost:9200
+
+CORS_ORIGINS=http://localhost:5173
+TRUST_PROXY=false
 ```
 
-The image sync uses one Unsplash search request per demo product type and saves the selected photo URLs and attribution in MongoDB. Reindexing refreshes search results with the new images. The sync requires the demo catalog to exist and consumes Unsplash API requests.
+Refer to `backend/.env.example` for the complete configuration.
 
-### Verify Phase 3
+**Security:** Never commit `.env` files, passwords, secret keys, or production credentials to GitHub.
 
-```powershell
-npm.cmd run test:catalog
-```
+## 🎯 Project Goals
 
-### Verify Phase 4
+SearchIQ is being developed to demonstrate practical skills in:
 
-In a second terminal:
+- Full-stack web application development
+- REST API design and integration
+- Natural-language processing and semantic search
+- Database modeling and search indexing
+- Authentication and application security
+- Caching and performance optimization
+- Containerization and cloud deployment
 
-```powershell
-cd backend
-npm.cmd run test:ai
-```
+## 🔮 Future Enhancements
 
-Swagger:
+Potential enhancements include voice-based product search, more personalized recommendations, improved search relevance, richer analytics, and scalable cloud deployment.
 
-`http://localhost:5000/api/docs`
+## 👩‍💻 Author
 
-The admin-only AI diagnostic endpoints appear under **AI**.
+**Parkhi Kumari**
 
-## AI service
+B.Tech Computer Science and Engineering — AI & Data Science
+Interested in Full-Stack Development, Artificial Intelligence, NLP, and Software Engineering.
 
-The service uses `sentence-transformers/all-MiniLM-L6-v2` and returns 384-dimensional normalized embeddings.
-
-Main internal endpoints:
-
-- `GET /health`
-- `GET /health/ready`
-- `POST /v1/query/parse`
-- `POST /v1/query/analyze`
-- `POST /v1/embed/query`
-- `POST /v1/embed/products`
-- `GET /v1/embed/info`
-- `POST /v1/reviews/summarize`
-
-The Node backend remains the public API and talks to the Python service over internal HTTP/JSON.
-
-> Development note: `AI_INTERNAL_KEY` and JWT/admin credentials in local `.env` files are development-only. Never commit `.env` files or production secrets.
-
-## Phase 6A – Shopping Core
-
-Cart, wishlist, checkout/orders, verified-purchase reviews, notifications, and admin order management are implemented in the backend. See `PHASE6A.md` and run `npm.cmd run test:commerce`.
+---
