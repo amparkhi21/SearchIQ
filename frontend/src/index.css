@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body { @apply bg-surface text-ink-900 font-sans antialiased; text-rendering: optimizeLegibility; }
+  h1, h2, h3, h4 { @apply tracking-tight text-ink-900; }
+  img { @apply max-w-full; }
+  :focus-visible { @apply outline-none ring-2 ring-brand-500 ring-offset-2 ring-offset-white; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible { @apply ring-offset-0; }
+  ::selection { @apply bg-brand-100 text-brand-900; }
+}
+
+@layer components {
+  .container-page { @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8; }
+  .page { @apply container-page py-6 sm:py-8; }
+  .eyebrow { @apply text-xs font-semibold uppercase tracking-[0.14em] text-brand-600; }
+
+  /* Buttons */
+  .btn { @apply inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-sm font-semibold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-primary { @apply btn bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:bg-brand-800; }
+  .btn-dark { @apply btn bg-ink-900 text-white hover:bg-ink-800 active:bg-ink-950; }
+  .btn-secondary { @apply btn border border-ink-200 bg-white text-ink-800 hover:border-ink-300 hover:bg-ink-50; }
+  .btn-ghost { @apply btn text-ink-700 hover:bg-ink-100; }
+  .btn-danger { @apply btn border border-red-200 bg-white text-red-600 hover:bg-red-50; }
+  .btn-sm { @apply h-8 px-3 text-xs; }
+  .btn-lg { @apply h-12 px-6 text-base; }
+  .btn-block { @apply w-full; }
+  .btn-icon { @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-ink-700 transition-colors hover:bg-ink-100 disabled:opacity-50; }
+
+  /* Form controls */
+  .field-label { @apply mb-1.5 block text-sm font-medium text-ink-700; }
+  .input { @apply block h-10 w-full min-w-0 rounded-lg border border-ink-200 bg-white px-3 text-sm text-ink-900 placeholder:text-ink-400 transition-colors hover:border-ink-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none disabled:bg-ink-50 disabled:text-ink-400; }
+  .input-error { @apply border-red-400 focus:border-red-500 focus:ring-red-500/20; }
+  textarea.input { @apply h-auto min-h-[96px] py-2.5; }
+  select.input { @apply pr-8; }
+  .field-error { @apply mt-1 text-xs text-red-600; }
+  .field-hint { @apply mt-1 text-xs text-ink-500; }
+
+  /* Surfaces */
+  .card { @apply rounded-xl border border-ink-100 bg-white shadow-card; }
+  .card-pad { @apply card p-5 sm:p-6; }
+  .section-title { @apply text-xl font-bold sm:text-2xl; }
+
+  /* Badges */
+  .badge { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold; }
+  .badge-neutral { @apply badge bg-ink-100 text-ink-700; }
+  .badge-brand { @apply badge bg-brand-50 text-brand-700; }
+  .badge-success { @apply badge bg-emerald-50 text-emerald-700; }
+  .badge-warn { @apply badge bg-amber-50 text-amber-700; }
+  .badge-danger { @apply badge bg-red-50 text-red-700; }
+  .badge-info { @apply badge bg-sky-50 text-sky-700; }
+
+  /* Skeleton shimmer */
+  .skeleton { @apply relative overflow-hidden rounded-md bg-ink-100; }
+  .skeleton::after { content: ''; @apply absolute inset-0 -translate-x-full animate-[shimmer_1.4s_infinite] bg-gradient-to-r from-transparent via-white/60 to-transparent; }
+
+  /* Tables */
+  .table-wrap { @apply relative overflow-x-auto rounded-xl border border-ink-100 bg-white shadow-card; }
+  .table { @apply w-full min-w-[640px] text-left text-sm; }
+  .table thead th { @apply whitespace-nowrap border-b border-ink-100 bg-ink-50/70 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-500; }
+  .table tbody td { @apply border-b border-ink-100 px-4 py-3 align-middle; }
+  .table tbody tr:last-child td { @apply border-b-0; }
+  .table tbody tr:hover { @apply bg-ink-50/50; }
+
+  .link { @apply font-medium text-brand-600 hover:text-brand-700 hover:underline; }
+}
+
+@layer utilities {
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #d0d6e3 transparent; }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

@@ -1,0 +1,54 @@
+{
+  "name": "searchiq-backend",
+  "version": "1.0.0",
+  "description": "SearchIQ – AI Product Search Engine: backend API",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon --watch src --ext js,json --ignore src/uploads src/index.js",
+    "seed:admin": "node src/seed/createAdmin.js",
+    "seed:catalog": "node src/seed/catalog.seed.js",
+    "seed:catalog:reset": "node src/seed/catalog.seed.js --reset",
+    "seed:images:unsplash": "node src/seed/unsplashImages.seed.js",
+    "test:catalog": "node scripts/smoke-test-catalog.mjs",
+    "test:ai": "node scripts/smoke-test-ai.mjs",
+    "search:reindex": "node src/seed/indexAll.js",
+    "test:search-index": "node scripts/smoke-test-search-index.mjs",
+    "test:search-bm25": "node scripts/smoke-test-bm25.mjs",
+    "test:search-semantic": "node scripts/smoke-test-semantic.mjs",
+    "test:search-hybrid": "node scripts/smoke-test-hybrid.mjs",
+    "test:search-query": "node scripts/smoke-test-search-query.mjs",
+    "test:search-features": "node scripts/smoke-test-search-features.mjs",
+    "test:recommendations": "node scripts/smoke-test-recommendations.mjs",
+    "test:analytics": "node scripts/smoke-test-analytics.mjs",
+    "test:commerce": "node scripts/smoke-test-commerce.mjs"
+  },
+  "dependencies": {
+    "@opensearch-project/opensearch": "^2.10.0",
+    "bcryptjs": "^2.4.3",
+    "compression": "^1.7.4",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "hpp": "^0.2.3",
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.5.0",
+    "morgan": "^1.10.0",
+    "swagger-ui-express": "^5.0.1",
+    "winston": "^3.13.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
