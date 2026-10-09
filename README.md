@@ -231,6 +231,7 @@ Potential enhancements include voice-based product search, more personalized rec
 **Parkhi Kumari**
 
 B.Tech Computer Science and Engineering — AI & Data Science
+
 Interested in Full-Stack Development, Artificial Intelligence, NLP, and Software Engineering.
 
 ---
