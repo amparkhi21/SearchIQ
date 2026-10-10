@@ -1,4 +1,4 @@
-# 🛍️ SearchIQ — AI Product Search Engine
+# 🛍️ SearchIQ — AI Product Search Intelligence Shopping
 
 **Search Smarter. Find Better.**
 
