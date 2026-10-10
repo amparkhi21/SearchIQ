@@ -8,10 +8,10 @@ const clean = (params = {}) =>
  * `sort=relevance` is the backend default but NOT a valid enum value, so it is never sent.
  * → { results, mode, query, analysis, cached, meta }
  */
-export const search = async (params = {}) => {
+export const search = async (params = {}, config = {}) => {
   const p = clean(params);
   if (p.sort === 'relevance') delete p.sort;
-  return unwrapWithMeta(await api.get('/search/query', { params: p }));
+  return unwrapWithMeta(await api.get('/search/query', { ...config, params: p }));
 };
 /** → { suggestions: [{ type: 'brand'|'category'|'product', text, id?, slug?, brand?, category? }] } */
 export const suggestions = async (params = {}, config = {}) => unwrap(await api.get('/search/suggestions', { params: clean(params), ...config }));

@@ -16,7 +16,7 @@ import { formatNumber } from '../utils/format';
 import formatCurrency from '../utils/formatCurrency';
 
 const FILTER_KEYS = ['category', 'brand', 'minPrice', 'maxPrice', 'rating', 'inStock', 'minDiscount'];
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 20;
 
 export default function SearchResults() {
   const [sp, setSp] = useSearchParams();

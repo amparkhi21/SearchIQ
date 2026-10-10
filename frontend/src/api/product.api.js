@@ -4,7 +4,7 @@ const clean = (params = {}) =>
   Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''));
 
 /** → { products, meta } */
-export const listProducts = async (params = {}) => unwrapWithMeta(await api.get('/products', { params: clean(params) }));
+export const listProducts = async (params = {}, config = {}) => unwrapWithMeta(await api.get('/products', { ...config, params: clean(params) }));
 export const getProduct = async (idOrSlug) => unwrap(await api.get(`/products/${idOrSlug}`));
 export const createProduct = async (payload) => unwrap(await api.post('/products', payload));
 export const updateProduct = async (id, payload) => unwrap(await api.put(`/products/${id}`, payload));
