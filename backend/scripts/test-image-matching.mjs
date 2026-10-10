@@ -46,6 +46,18 @@ await test('photos of a different product type are rejected', () => {
   assert.ok(scorePhoto(photo('s1', 'white sneakers on a wooden floor'), derived) > 0);
 });
 
+await test('shoe matching requires the specific type and respects catalog color', () => {
+  const formal = deriveImageQuery('Formal Oxford Shoes', line('Formal Shoes'), { color: 'Black' });
+  assert.equal(formal.query, 'black leather formal shoes');
+  assert.equal(scorePhoto(photo('running', 'black running shoes'), formal), -1);
+  assert.equal(scorePhoto(photo('red-formal', 'red leather formal oxford shoes'), formal), -1);
+  assert.ok(scorePhoto(photo('black-formal', 'black leather formal oxford shoes'), formal) > 0);
+
+  const sandals = deriveImageQuery('Block Heel Sandals', line('Sandals'), { color: 'Black' });
+  assert.equal(sandals.query, 'black block heel sandals');
+  assert.ok(scorePhoto(photo('heels', 'black block heel sandals'), sandals) > 0);
+});
+
 await test('ranking is deterministic and skips used photos', () => {
   const derived = deriveImageQuery('Cosco Volleyball', line('Sports Equipment', 'Sports & Fitness'));
   const photos = [photo('b', 'volleyball on sand'), photo('a', 'volleyball on sand'), photo('c', 'a dog')];

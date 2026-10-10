@@ -75,7 +75,7 @@ function Details({ product, onReviewsChanged }) {
   return (
     <>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-12">
-        <Gallery images={productImages(product)} name={product.name} />
+        <Gallery images={productImages(product)} name={product.name} category={product.category} />
 
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 text-sm">

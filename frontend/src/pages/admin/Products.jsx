@@ -73,7 +73,7 @@ export default function AdminProducts() {
                       <tr key={p.id} className={p.isActive === false ? 'opacity-60' : ''}>
                         <td className="max-w-[22rem]">
                           <div className="flex items-center gap-3">
-                            <ProductImage src={productImages(p)[0]?.url} alt="" label={p.name} className="h-11 w-14 shrink-0 rounded-lg bg-ink-50" />
+                            <ProductImage src={productImages(p)[0]?.url} alt="" label={p.name} category={p.category} className="h-11 w-14 shrink-0 rounded-lg bg-ink-50" />
                             <div className="min-w-0"><Link to={productPath(p)} className="block truncate font-medium hover:text-brand-700">{p.name}</Link><p className="truncate text-xs text-ink-400">{p.brand?.name} · {p.sku}</p></div>
                           </div>
                         </td>

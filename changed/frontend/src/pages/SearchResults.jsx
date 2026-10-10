@@ -52,8 +52,6 @@ export default function SearchResults() {
   // Update the URL (single source of truth). Any filter / sort change resets pagination.
   const update = useCallback((patch, { keepPage = false } = {}) => {
     const next = new URLSearchParams(sp);
-    // Choosing a category starts category browsing; don't keep an unrelated search query active.
-    if (patch.category) next.delete('q');
     Object.entries(patch).forEach(([k, v]) => { if (v === '' || v == null) next.delete(k); else next.set(k, String(v)); });
     if (!keepPage) next.delete('page');
     if (next.get('sort') === 'relevance') next.delete('sort');

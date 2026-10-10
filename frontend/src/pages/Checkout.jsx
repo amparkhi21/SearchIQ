@@ -132,7 +132,7 @@ export default function Checkout() {
             <ul className="divide-y divide-ink-100">
               {items.map(({ product: p, quantity }) => (
                 <li key={productId(p)} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                  <ProductImage src={productImages(p)[0]?.url} alt={p.name} label={p.name} className="h-14 w-16 shrink-0 rounded-lg bg-ink-50" />
+                  <ProductImage src={productImages(p)[0]?.url} alt={p.name} label={p.name} category={p.category} className="h-14 w-16 shrink-0 rounded-lg bg-ink-50" />
                   <div className="min-w-0 flex-1"><p className="line-clamp-1 text-sm font-medium">{p.name}</p><p className="text-xs text-ink-500">Qty {quantity} × {formatCurrency(p.finalPrice ?? p.price)}</p></div>
                   <p className="text-sm font-semibold">{formatCurrency(Number(p.finalPrice ?? p.price) * quantity)}</p>
                 </li>

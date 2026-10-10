@@ -1,6 +1,7 @@
-// Image-only update: writes the curated images (manifest + overrides) onto EXISTING products by SKU.
+// Image-only update: writes curated images (manifest + overrides) onto EXISTING products by SKU.
 // It only $sets `images`; prices, stock, ratings, reviews, orders, brands and categories are never touched,
-// nothing is inserted or deleted, and products without a manifest entry keep their current images.
+// nothing is inserted or deleted, and uncurated non-seed images are preserved. Known generic seed photos
+// are cleared when there is no curated replacement, so they cannot masquerade as product-specific photos.
 //
 //   npm run images:apply -- --dry-run     show what would change
 //   npm run images:apply                  update MongoDB, then OpenSearch (images field only), then clear search cache
@@ -12,6 +13,7 @@ import { connectRedis, disconnectRedis, getRedisClient } from '../config/redis.j
 import logger, { closeLogger } from '../config/logger.js';
 import Product from '../models/Product.js';
 import { updateProductSearchFacts } from '../services/indexing.service.js';
+import { buildCatalog } from './data/catalog.builder.js';
 import { loadImageAssignments } from './data/imageManifest.js';
 
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -37,17 +39,16 @@ async function clearSearchCache() {
 
 async function applyImages() {
   const assignments = loadImageAssignments();
-  if (assignments.size === 0) {
-    throw new Error('No images in the manifest yet. Run "npm run images:resolve" first.');
-  }
+  const catalogSkus = buildCatalog().products.map((product) => product.sku);
 
   await connectMongo();
-  const products = await Product.find({ sku: { $in: [...assignments.keys()] } }).select('_id sku name images');
+  const products = await Product.find({ sku: { $in: catalogSkus } }).select('_id sku name images');
   const bySku = new Map(products.map((product) => [product.sku, product]));
 
   const operations = [];
   const changedIds = [];
   const skipped = { missing: [], nameMismatch: [], unchanged: 0 };
+  let legacyFallbacksCleared = 0;
 
   for (const [sku, { image, name }] of assignments) {
     const product = bySku.get(sku);
@@ -60,8 +61,21 @@ async function applyImages() {
     changedIds.push(product._id.toString());
   }
 
+  for (const product of products) {
+    if (assignments.has(product.sku)) continue;
+    const image = product.images?.length === 1 ? product.images[0] : null;
+    const isKnownSeedFallback = image?.url?.startsWith('https://images.unsplash.com/')
+      && image.alt?.startsWith(`${product.name} - general `)
+      && image.alt.endsWith(' photo');
+    if (!isKnownSeedFallback) continue;
+    operations.push({ updateOne: { filter: { sku: product.sku }, update: { $set: { images: [] } } } });
+    changedIds.push(product._id.toString());
+    legacyFallbacksCleared += 1;
+  }
+
   logger.info(
-    `${assignments.size} curated images: ${operations.length} to update, ${skipped.unchanged} already current, ` +
+    `${assignments.size} curated images: ${operations.length - legacyFallbacksCleared} to update, ` +
+      `${legacyFallbacksCleared} known generic seed photos to clear, ${skipped.unchanged} already current, ` +
       `${skipped.missing.length} SKUs not in database, ${skipped.nameMismatch.length} name mismatches`,
   );
   skipped.missing.slice(0, 10).forEach((sku) => logger.warn(`  not in database: ${sku}`));

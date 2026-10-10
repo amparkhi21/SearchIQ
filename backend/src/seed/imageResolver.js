@@ -45,7 +45,7 @@ export async function resolveImages({ products, manifest, searchPhotos, verify, 
 
   for (const product of products) {
     if (!force && manifest.entries[product.sku]) continue;
-    const derived = deriveImageQuery(product.name, product.line);
+    const derived = deriveImageQuery(product.name, product.line, { color: product.color });
     if (!groups.has(derived.query)) groups.set(derived.query, { derived, items: [] });
     groups.get(derived.query).items.push(product);
   }

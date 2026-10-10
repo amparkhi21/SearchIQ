@@ -28,7 +28,12 @@ let cursor = 0;
 const products = [];
 for (const line of productLines) {
   for (let i = 0; i < line.items.length; i += 1, cursor += 1) {
-    products.push({ sku: catalog.products[cursor].sku, name: catalog.products[cursor].name, line });
+    products.push({
+      sku: catalog.products[cursor].sku,
+      name: catalog.products[cursor].name,
+      line,
+      color: line.colors?.[i % line.colors.length],
+    });
   }
 }
 

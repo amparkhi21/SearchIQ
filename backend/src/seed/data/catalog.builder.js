@@ -20,86 +20,6 @@ function createRandom(seed) {
   };
 }
 
-const placeholder = (text, background, foreground) =>
-  `https://placehold.co/800x800/${background}/${foreground}/png?text=${encodeURIComponent(text)}`;
-
-const PRODUCT_PHOTO_POOLS = [
-  {
-    pattern: /footwear|shoe|sneaker|sandal|slipper/i,
-    urls: [
-      'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1600185365483-26d7a4cc7519?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1460353581641-37baddab0fa2?auto=format&fit=crop&w=800&q=80',
-    ],
-  },
-  {
-    pattern: /clothing|apparel|fashion|shirt|jeans/i,
-    urls: [
-      'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1434389677669-e08b4cac3105?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80',
-    ],
-  },
-  {
-    pattern: /grocery|food|pantry|snack|staple|beverage/i,
-    urls: [
-      'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=800&q=80',
-    ],
-  },
-  {
-    pattern: /electronic|mobile|phone|laptop|computer|audio|camera|gaming/i,
-    urls: [
-      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1498049794561-7780e7231661?auto=format&fit=crop&w=800&q=80',
-    ],
-  },
-  {
-    pattern: /beauty|cosmetic|skincare|skin care|personal care|makeup/i,
-    urls: [
-      'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=800&q=80',
-    ],
-  },
-  {
-    pattern: /home|kitchen|furniture|decor|appliance/i,
-    urls: [
-      'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=800&q=80',
-    ],
-  },
-  {
-    pattern: /sport|fitness|gym|outdoor/i,
-    urls: [
-      'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=800&q=80',
-    ],
-  },
-  {
-    pattern: /book|stationery|education/i,
-    urls: [
-      'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=800&q=80',
-    ],
-  },
-];
-
-/**
- * Last-resort, category-level photo. Only used when a product has no curated entry in
- * product-images.manifest.json / product-images.overrides.json (see `npm run images:resolve`).
- * One image only: showing the same generic photo twice in a gallery adds nothing.
- */
-function getFallbackImages(category, name, sequence) {
-  const pool = PRODUCT_PHOTO_POOLS.find(({ pattern }) => pattern.test(category || ''))?.urls;
-  // No category photo we trust (e.g. Toys, Bags): store none, so the UI shows its fallback tile
-  // instead of an unrelated picture.
-  if (!pool) return [];
-
-  return [{ url: pool[sequence % pool.length], alt: `${name} - general ${category} photo` }];
-}
-
 const compact = (object) =>
   Object.fromEntries(
     Object.entries(object).filter(
@@ -129,7 +49,6 @@ export function buildCatalog() {
   const brandCategories = new Map(); // brand name -> Set of category names
   const skuCounters = new Map();
   const usedSlugs = new Set();
-  const imageSequences = new Map();
   const products = [];
 
   for (const line of productLines) {
@@ -194,10 +113,6 @@ export function buildCatalog() {
         `Key features: ${line.features.join(', ')}.` +
         (variant ? ` Variant: ${variant}.` : '');
 
-      const imageLabel = `${brand} ${line.type}`;
-      const imageSequence = imageSequences.get(line.category) ?? 0;
-      imageSequences.set(line.category, imageSequence + 1);
-
       products.push({
         name,
         slug,
@@ -213,9 +128,9 @@ export function buildCatalog() {
         stock,
         lowStockThreshold: LOW_STOCK_THRESHOLD,
         inStock: stock > 0,
-        images: imageAssignments.has(sku)
-          ? [imageAssignments.get(sku).image]
-          : getFallbackImages(line.category, name, imageSequence),
+        // Never assign a generic category photo as if it represented a specific product.
+        // Curated type-matched manifest entries are applied separately; the UI supplies a category fallback.
+        images: imageAssignments.has(sku) ? [imageAssignments.get(sku).image] : [],
         tags,
         attributes: compact({
           color,

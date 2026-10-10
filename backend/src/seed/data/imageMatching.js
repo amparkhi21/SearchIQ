@@ -14,6 +14,7 @@ const RULES = [
   [/sling bag/, 'sling bag', ['bag']],
   [/wallet/, 'leather wallet', ['wallet']],
   // ---------------------------------------------------------------- Footwear
+  [/block heels? sandals?|heels? sandals?/, 'block heel sandals', ['heel', 'sandal'], 2],
   [/flip-?flops?|slide sandals?/, 'flip flops sandals', ['flip', 'sandal', 'slipper', 'slide']],
   [/clogs?/, 'clogs shoes', ['clog']],
   [/wedge/, 'wedge sandals', ['wedge', 'sandal']],
@@ -24,7 +25,7 @@ const RULES = [
   [/boots?/, 'leather boots', ['boot']],
   [/school shoes/, 'school shoes', ['shoe']],
   [/kids .*(sneakers|shoes)/, 'kids sneakers', ['kid', 'child', 'sneaker', 'shoe']],
-  [/formal.*shoes|oxford|derby/, 'leather formal shoes', ['shoe', 'oxford', 'leather', 'formal']],
+  [/formal.*shoes|oxford|derby/, 'leather formal shoes', ['shoe', 'oxford', 'leather', 'formal'], 2],
   [/running|training shoes|walking shoes/, 'running shoes', ['running', 'shoe', 'sneaker']],
   [/sneakers?/, 'sneakers', ['sneaker', 'shoe']],
   // ---------------------------------------------------------------- Clothing
@@ -172,20 +173,42 @@ const RULES = [
  * level "type"     -> a product-type rule matched (photo shows that kind of product, not the exact model)
  * level "category" -> no rule matched; falls back to "<line type> <category>"
  */
-export function deriveImageQuery(productName, line) {
+const COLORS = ['black', 'white', 'blue', 'grey', 'gray', 'red', 'brown', 'tan', 'navy', 'olive', 'beige', 'pink', 'gold', 'green', 'purple', 'yellow', 'orange'];
+const normalizeColor = (color) => (color === 'gray' ? 'grey' : color);
+
+export function deriveImageQuery(productName, line, { color } = {}) {
+  const normalizedColor = COLORS.includes(String(color || '').toLowerCase())
+    ? normalizeColor(String(color).toLowerCase())
+    : '';
+
   // Match on the product name first; the product line type (e.g. "Laptops & Computer Accessories")
   // is only a second pass, because it covers mixed lines and would otherwise hijack e.g. a mouse.
   for (const text of [productName, line.type]) {
     const haystack = text.toLowerCase();
-    for (const [pattern, query, core] of RULES) {
-      if (pattern.test(haystack)) return { query, core, level: 'type' };
+    for (const [pattern, query, core, minCoreHits = 1] of RULES) {
+      if (pattern.test(haystack)) {
+        return {
+          query: [normalizedColor, query].filter(Boolean).join(' '),
+          core,
+          minCoreHits,
+          color: normalizedColor,
+          level: 'type',
+        };
+      }
     }
   }
-  return { query: `${line.type} ${line.category}`, core: [], level: 'category' };
+  return {
+    query: [normalizedColor, line.type, line.category].filter(Boolean).join(' '),
+    core: [],
+    minCoreHits: 0,
+    color: normalizedColor,
+    level: 'category',
+  };
 }
 
 /** Scores an Unsplash search result against a derived query. Higher is better; -1 means reject. */
-export function scorePhoto(photo, { query, core }) {
+export function scorePhoto(photo, derived) {
+  const { query, core } = derived;
   if (!photo?.id || !photo?.urls?.raw) return -1;
   const text = [
     photo.alt_description,
@@ -197,7 +220,11 @@ export function scorePhoto(photo, { query, core }) {
     .toLowerCase();
 
   const coreHits = core.filter((word) => text.includes(word)).length;
-  if (core.length > 0 && coreHits === 0) return -1;
+  if (coreHits < (derived.minCoreHits ?? (core.length > 0 ? 1 : 0))) return -1;
+  if (derived.color) {
+    const mentionedColors = COLORS.filter((color) => new RegExp(`\\b${color}\\b`).test(text)).map(normalizeColor);
+    if (mentionedColors.length > 0 && !mentionedColors.includes(derived.color)) return -1;
+  }
   const queryHits = query.split(/\s+/).filter((word) => word.length > 2 && text.includes(word)).length;
   return coreHits * 3 + queryHits;
 }

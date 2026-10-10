@@ -53,7 +53,7 @@ export default function Cart() {
             return (
               <li key={id} className={`card flex gap-4 p-3.5 sm:p-4 ${busy ? 'opacity-70' : ''}`}>
                 <Link to={productPath(p)} className="h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-ink-50 sm:h-28 sm:w-32">
-                  <ProductImage src={productImages(p)[0]?.url} alt={p.name} label={p.name} className="h-full w-full" />
+                  <ProductImage src={productImages(p)[0]?.url} alt={p.name} label={p.name} category={p.category} className="h-full w-full" />
                 </Link>
                 <div className="flex min-w-0 flex-1 flex-col">
                   <div className="flex items-start justify-between gap-3">

@@ -21,6 +21,7 @@ export default function ProductCard({ product }) {
       <div className="relative aspect-[4/3] overflow-hidden bg-ink-50">
         <Link to={to} tabIndex={-1} aria-hidden="true" className="block h-full w-full">
           <ProductImage src={images[0]?.url} alt={images[0]?.alt || product.name} label={product.name}
+            category={product.category}
             className={`h-full w-full transition-transform duration-300 group-hover:scale-[1.04] ${out ? 'opacity-60 grayscale' : ''}`} />
         </Link>
         <UnsplashAttribution image={images[0]} className="absolute bottom-1.5 left-1.5 z-10 max-w-[calc(100%-0.75rem)] rounded bg-white/90 px-1.5 py-0.5 text-[9px] shadow-sm" />

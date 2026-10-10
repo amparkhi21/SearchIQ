@@ -3,7 +3,7 @@ import ProductImage from '../ui/ProductImage';
 import Icon from '../ui/Icon';
 import UnsplashAttribution from '../ui/UnsplashAttribution';
 
-export default function Gallery({ images = [], name }) {
+export default function Gallery({ images = [], name, category }) {
   const [index, setIndex] = useState(0);
   useEffect(() => setIndex(0), [images.length, name]);
   const list = images.length ? images : [{ url: '', alt: name }];
@@ -14,7 +14,7 @@ export default function Gallery({ images = [], name }) {
   return (
     <div className="lg:sticky lg:top-24">
       <div className="group relative aspect-[4/3] overflow-hidden rounded-2xl border border-ink-100 bg-ink-50">
-        <ProductImage key={current.url} src={current.url} alt={current.alt || name} label={name} fit="contain" eager className="h-full w-full" />
+        <ProductImage key={current.url} src={current.url} alt={current.alt || name} label={name} category={category} fit="contain" eager className="h-full w-full" />
         <UnsplashAttribution image={current} className="absolute bottom-2 left-2 rounded bg-white/90 px-2 py-1 text-[10px] shadow-sm" />
         {list.length > 1 && (
           <>
@@ -28,7 +28,7 @@ export default function Gallery({ images = [], name }) {
           {list.map((img, i) => (
             <button key={`${img.url}-${i}`} type="button" role="tab" aria-selected={i === index} aria-label={`Image ${i + 1}`} onClick={() => setIndex(i)}
               className={`h-16 w-20 shrink-0 overflow-hidden rounded-lg border-2 bg-ink-50 transition-colors ${i === index ? 'border-brand-600' : 'border-transparent hover:border-ink-200'}`}>
-              <ProductImage src={img.url} alt="" label={name} className="h-full w-full" />
+              <ProductImage src={img.url} alt="" label={name} category={category} className="h-full w-full" />
             </button>
           ))}
         </div>

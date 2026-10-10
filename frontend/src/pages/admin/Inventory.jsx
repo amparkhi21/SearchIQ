@@ -91,7 +91,7 @@ export default function Inventory() {
                   const st = stockState(p);
                   return (
                     <tr key={p.id}>
-                      <td className="max-w-[20rem]"><div className="flex items-center gap-3"><ProductImage src={productImages(p)[0]?.url} alt="" label={p.name} className="h-10 w-12 shrink-0 rounded-lg bg-ink-50" /><span className="truncate font-medium">{p.name}</span></div></td>
+                      <td className="max-w-[20rem]"><div className="flex items-center gap-3"><ProductImage src={productImages(p)[0]?.url} alt="" label={p.name} category={p.category} className="h-10 w-12 shrink-0 rounded-lg bg-ink-50" /><span className="truncate font-medium">{p.name}</span></div></td>
                       <td className="whitespace-nowrap text-ink-500">{p.sku}</td>
                       <td>{st === 'out' ? <span className="badge-danger">Out of stock</span> : st === 'low' ? <span className="badge-warn">Low stock</span> : <span className="badge-success">In stock</span>}</td>
                       <td className="text-right text-ink-500">{p.lowStockThreshold}</td>
