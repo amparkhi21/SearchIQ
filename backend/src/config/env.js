@@ -36,6 +36,11 @@ const schema = z.object({
   MONGO_URI: str('mongodb://localhost:27017/searchiq'),
   REDIS_URL: str('redis://localhost:6379'),
 
+  // opensearch (default): BM25 + semantic + hybrid search via OpenSearch and the AI service.
+  // mongo: MongoDB-only keyword search; OpenSearch and the AI service are neither required nor contacted.
+  SEARCH_MODE: z
+    .preprocess(emptyToUndefined, z.enum(['opensearch', 'mongo', 'mongodb']).default('opensearch'))
+    .transform((value) => (value === 'opensearch' ? 'opensearch' : 'mongo')),
   OPENSEARCH_NODE: str('http://localhost:9200'),
   OPENSEARCH_USERNAME: optionalStr,
   OPENSEARCH_PASSWORD: optionalStr,
@@ -162,7 +167,8 @@ const DEV_REFRESH_SECRET = 'dev-only-refresh-secret-change-me-0123456789abcdef';
 const configErrors = [];
 
 if (isProduction) {
-  if (e.AI_INTERNAL_KEY.startsWith('dev-only-')) {
+  // The AI key is not used when search runs in MongoDB-only mode
+  if (e.SEARCH_MODE !== 'mongo' && e.AI_INTERNAL_KEY.startsWith('dev-only-')) {
     configErrors.push('AI_INTERNAL_KEY must be changed in production');
   }
   if (!e.JWT_ACCESS_SECRET) configErrors.push('JWT_ACCESS_SECRET is required in production');
@@ -249,6 +255,8 @@ export const env = Object.freeze({
   healthCheckTimeoutMs: e.HEALTH_CHECK_TIMEOUT_MS,
 
   search: {
+    mode: e.SEARCH_MODE,
+    mongoOnly: e.SEARCH_MODE === 'mongo',
     indexName: e.SEARCH_INDEX_NAME,
     embeddingDimensions: e.SEARCH_EMBEDDING_DIMENSIONS,
     embeddingVersion: e.SEARCH_EMBEDDING_VERSION,

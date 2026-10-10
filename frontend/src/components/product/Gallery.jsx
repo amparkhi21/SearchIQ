@@ -14,7 +14,7 @@ export default function Gallery({ images = [], name }) {
   return (
     <div className="lg:sticky lg:top-24">
       <div className="group relative aspect-[4/3] overflow-hidden rounded-2xl border border-ink-100 bg-ink-50">
-        <ProductImage key={current.url} src={current.url} alt={current.alt || name} label={name} fit="contain" className="h-full w-full" />
+        <ProductImage key={current.url} src={current.url} alt={current.alt || name} label={name} fit="contain" eager className="h-full w-full" />
         <UnsplashAttribution image={current} className="absolute bottom-2 left-2 rounded bg-white/90 px-2 py-1 text-[10px] shadow-sm" />
         {list.length > 1 && (
           <>

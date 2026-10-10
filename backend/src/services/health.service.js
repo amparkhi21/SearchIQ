@@ -92,19 +92,23 @@ async function checkAiService() {
 
 /** Full health report including every backing service. */
 export async function getHealth() {
+  // In SEARCH_MODE=mongo OpenSearch and the AI service are not used, so they are reported as
+  // "disabled" instead of being probed (and never make the API unhealthy).
+  const disabled = () => ({ status: SERVICE_STATUS.DISABLED, reason: 'SEARCH_MODE=mongo' });
   const [mongodb, redis, opensearch, ai] = await Promise.all([
     runCheck('MongoDB', checkMongo),
     runCheck('Redis', checkRedis),
-    runCheck('OpenSearch', checkOpenSearch),
-    runCheck('AI service', checkAiService),
+    env.search.mongoOnly ? disabled() : runCheck('OpenSearch', checkOpenSearch),
+    env.search.mongoOnly ? disabled() : runCheck('AI service', checkAiService),
   ]);
 
   const services = { mongodb, redis, opensearch, ai };
   // AI is intentionally non-critical: the API remains healthy and can fall back
   // to non-AI functionality if the Python service is unavailable.
   const criticalServices = { mongodb, redis, opensearch };
-  const healthy = Object.values(criticalServices).every((s) => s.status === SERVICE_STATUS.UP);
-  const fullyOperational = Object.values(services).every((s) => s.status === SERVICE_STATUS.UP);
+  const isOk = (s) => s.status === SERVICE_STATUS.UP || s.status === SERVICE_STATUS.DISABLED;
+  const healthy = Object.values(criticalServices).every(isOk);
+  const fullyOperational = Object.values(services).every(isOk);
 
   return {
     healthy,
@@ -113,6 +117,7 @@ export async function getHealth() {
       application: env.appName,
       version: env.appVersion,
       environment: env.nodeEnv,
+      searchMode: env.search.mode,
       uptimeSeconds: Math.round(process.uptime()),
       timestamp: new Date().toISOString(),
       services,

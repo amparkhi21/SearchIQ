@@ -4,6 +4,7 @@ import { getRedisClient } from '../config/redis.js';
 import logger from '../config/logger.js';
 import { ApiError } from '../utils/ApiError.js';
 import { PRODUCT_INDEX } from './indexing.service.js';
+import { mongoSuggestions } from './mongo-search.service.js';
 
 const CACHE_PREFIX = 'search:suggest:v1:';
 
@@ -16,7 +17,8 @@ function normalize(value) {
 }
 
 function cacheKey(query, limit) {
-  return `${CACHE_PREFIX}${Buffer.from(JSON.stringify({ q: normalize(query), limit })).toString('base64url')}`;
+  const engine = env.search.mongoOnly ? { engine: 'mongo' } : {};
+  return `${CACHE_PREFIX}${Buffer.from(JSON.stringify({ q: normalize(query), limit, ...engine })).toString('base64url')}`;
 }
 
 async function readCache(key) {
@@ -55,6 +57,17 @@ export async function getSearchSuggestions({ q, limit = 10 } = {}) {
   const key = cacheKey(query, safeLimit);
   const cached = await readCache(key);
   if (cached) return { ...cached, cached: true };
+
+  if (env.search.mongoOnly) {
+    try {
+      const payload = { suggestions: await mongoSuggestions(query, safeLimit), cached: false };
+      await writeCache(key, payload);
+      return payload;
+    } catch (error) {
+      logger.error('Search suggestions failed', { error: error.message });
+      throw ApiError.serviceUnavailable('Search suggestions are unavailable');
+    }
+  }
 
   const client = getOpenSearchClient();
   const size = Math.min(20, safeLimit * 2);

@@ -25,6 +25,7 @@ export function buildSearchCacheKey(query, { mode = 'hybrid', admin = false } = 
     query,
     embeddingVersion: env.search.embeddingVersion,
     textVersion: env.search.textVersion,
+    ...(env.search.mongoOnly ? { engine: 'mongo' } : {}),
   });
   return `${PREFIX}${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
 }

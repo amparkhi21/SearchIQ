@@ -1,0 +1,4 @@
+{
+  "note": "Optional hand-verified, exact-product images keyed by SKU. Takes priority over the generated manifest. Example value: { \"url\": \"https://.../photo.jpg\", \"alt\": \"...\", \"source\": \"manufacturer\", \"license\": \"...\" }. The resolver never writes to this file.",
+  "entries": {}
+}

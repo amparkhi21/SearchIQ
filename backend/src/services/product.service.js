@@ -65,7 +65,7 @@ async function buildSearchFilter(tokens) {
   };
 }
 
-async function buildFilter(query, { admin }) {
+export async function buildFilter(query, { admin }) {
   const filter = {};
 
   // Only admins may see hidden (inactive) products

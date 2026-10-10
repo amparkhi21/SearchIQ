@@ -7,6 +7,10 @@ import Category from '../models/Category.js';
 import { reindexProducts } from '../services/indexing.service.js';
 
 async function main() {
+  if (env.search.mongoOnly) {
+    logger.info('SEARCH_MODE=mongo: there is no OpenSearch index to build; nothing to do');
+    return;
+  }
   const recreate = process.argv.includes('--recreate');
   logger.info(`Starting product search reindex (${recreate ? 'recreate' : 'upsert'} mode)`);
 

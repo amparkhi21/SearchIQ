@@ -6,6 +6,11 @@ import { env } from '../config/env.js';
 import { getOpenSearchClient } from '../config/opensearch.js';
 import { PRODUCT_INDEX } from './indexing.service.js';
 import { toSearchResult } from './search.service.js';
+import {
+  mongoPopularProducts,
+  mongoRecommendations,
+  mongoSimilarProducts,
+} from './mongo-search.service.js';
 import logger from '../config/logger.js';
 
 const DEFAULT_LIMIT = 10;
@@ -81,6 +86,8 @@ export async function getSimilarProducts(productId, limit = DEFAULT_LIMIT) {
     { path: 'brand', select: 'name slug logo' },
   ]);
   if (!product || !product.isActive) throw ApiError.notFound('Product not found');
+
+  if (env.search.mongoOnly) return mongoSimilarProducts(product, limit);
 
   let source;
   try {
@@ -176,6 +183,7 @@ export async function clearRecentlyViewed(user) {
 }
 
 async function fallbackPopular(limit) {
+  if (env.search.mongoOnly) return mongoPopularProducts(limit);
   const client = getOpenSearchClient();
   try {
     const response = await client.search({
@@ -208,6 +216,7 @@ export async function getRecommendations(user, limit = DEFAULT_LIMIT) {
   const userId = objectId(userIdOf(user));
   if (!userId) throw ApiError.unauthorized('Authentication required');
   const safe = safeLimit(limit);
+  if (env.search.mongoOnly) return mongoRecommendations(userId, safe);
 
   const recent = await RecentlyViewed.find({ user: userId })
     .sort({ viewedAt: -1 })

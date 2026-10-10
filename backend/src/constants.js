@@ -22,6 +22,7 @@ export const HTTP_STATUS = Object.freeze({
 export const SERVICE_STATUS = Object.freeze({
   UP: 'up',
   DOWN: 'down',
+  DISABLED: 'disabled', // intentionally not used in this deployment (e.g. OpenSearch in SEARCH_MODE=mongo)
 });
 
 // Overall application status in the health check

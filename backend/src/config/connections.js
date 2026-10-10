@@ -20,22 +20,30 @@ async function connectWithRetry(name, connectFn) {
 
 /** Connect to MongoDB, Redis and OpenSearch in parallel, waiting for each to become ready. */
 export async function connectAll() {
-  await Promise.all([
+  const tasks = [
     connectWithRetry('MongoDB', connectMongo),
     connectWithRetry('Redis', connectRedis),
-    connectWithRetry('OpenSearch', connectOpenSearch),
-  ]);
+  ];
+
+  if (env.search.mongoOnly) {
+    logger.info('SEARCH_MODE=mongo: using MongoDB keyword search; OpenSearch and the AI service are not required');
+  } else {
+    tasks.push(connectWithRetry('OpenSearch', connectOpenSearch));
+  }
+
+  await Promise.all(tasks);
   logger.info('All backing services connected');
 }
 
 /** Close every connection; a failure in one does not prevent closing the others. */
 export async function disconnectAll() {
-  const names = ['MongoDB', 'Redis', 'OpenSearch'];
-  const results = await Promise.allSettled([
-    disconnectMongo(),
-    disconnectRedis(),
-    disconnectOpenSearch(),
-  ]);
+  const names = ['MongoDB', 'Redis'];
+  const closers = [disconnectMongo(), disconnectRedis()];
+  if (!env.search.mongoOnly) {
+    names.push('OpenSearch');
+    closers.push(disconnectOpenSearch());
+  }
+  const results = await Promise.allSettled(closers);
 
   results.forEach((result, index) => {
     if (result.status === 'rejected') {

@@ -2,6 +2,7 @@ import { PRODUCT_MAX_TAGS } from '../../constants.js';
 import { calculateFinalPrice } from '../../utils/pricing.js';
 import { slugify } from '../../utils/slugify.js';
 import { categoryData } from './categories.data.js';
+import { loadImageAssignments } from './imageManifest.js';
 import { productLines } from './products.data.js';
 
 const DEFAULT_DISCOUNTS = [0, 5, 10, 10, 15, 20, 25, 30, 40];
@@ -52,7 +53,6 @@ const PRODUCT_PHOTO_POOLS = [
     urls: [
       'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1498049794561-7780e7231661?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1511706673742-163b4a7a7b5?auto=format&fit=crop&w=800&q=80',
     ],
   },
   {
@@ -86,28 +86,18 @@ const PRODUCT_PHOTO_POOLS = [
   },
 ];
 
-const DEFAULT_PRODUCT_PHOTOS = [
-  'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80',
-  'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=800&q=80',
-];
+/**
+ * Last-resort, category-level photo. Only used when a product has no curated entry in
+ * product-images.manifest.json / product-images.overrides.json (see `npm run images:resolve`).
+ * One image only: showing the same generic photo twice in a gallery adds nothing.
+ */
+function getFallbackImages(category, name, sequence) {
+  const pool = PRODUCT_PHOTO_POOLS.find(({ pattern }) => pattern.test(category || ''))?.urls;
+  // No category photo we trust (e.g. Toys, Bags): store none, so the UI shows its fallback tile
+  // instead of an unrelated picture.
+  if (!pool) return [];
 
-function getProductImages(category, name, sequence) {
-  const pool =
-    PRODUCT_PHOTO_POOLS.find(({ pattern }) =>
-      pattern.test(category || ''),
-    )?.urls ?? DEFAULT_PRODUCT_PHOTOS;
-  const first = sequence % pool.length;
-
-  return [
-    {
-      url: pool[first],
-      alt: `${name} - product view`,
-    },
-    {
-      url: pool[(first + 1) % pool.length],
-      alt: `${name} - alternate view`,
-    },
-  ];
+  return [{ url: pool[sequence % pool.length], alt: `${name} - general ${category} photo` }];
 }
 
 const compact = (object) =>
@@ -123,6 +113,7 @@ const compact = (object) =>
  */
 export function buildCatalog() {
   const rand = createRandom(20261004);
+  const imageAssignments = loadImageAssignments(); // SKU -> curated, relevance-matched image
   const randomInt = (min, max) => min + Math.floor(rand() * (max - min + 1));
 
   const categories = categoryData.map((category, index) => ({
@@ -222,7 +213,9 @@ export function buildCatalog() {
         stock,
         lowStockThreshold: LOW_STOCK_THRESHOLD,
         inStock: stock > 0,
-        images: getProductImages(line.category, name, imageSequence),
+        images: imageAssignments.has(sku)
+          ? [imageAssignments.get(sku).image]
+          : getFallbackImages(line.category, name, imageSequence),
         tags,
         attributes: compact({
           color,

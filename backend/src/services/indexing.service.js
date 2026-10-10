@@ -290,6 +290,7 @@ export async function indexProduct(productId, { refresh = 'wait_for' } = {}) {
 }
 
 export async function updateProductSearchFacts(productId, fields, { refresh = 'wait_for' } = {}) {
+  if (env.search.mongoOnly) return false; // no search index in MongoDB-only mode
   if (!mongoose.isValidObjectId(productId) || !fields || typeof fields !== 'object') return false;
   const client = getOpenSearchClient();
   try {
@@ -302,6 +303,7 @@ export async function updateProductSearchFacts(productId, fields, { refresh = 'w
 }
 
 export async function deleteProductFromIndex(productId, { refresh = 'wait_for' } = {}) {
+  if (env.search.mongoOnly) return false;
   if (!mongoose.isValidObjectId(productId)) return false;
 
   const client = getOpenSearchClient();

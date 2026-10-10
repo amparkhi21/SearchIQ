@@ -8,6 +8,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { buildPaginationMeta, getPagination } from '../utils/pagination.js';
 import { resolveByIdOrSlug } from './lookup.service.js';
 import { PRODUCT_INDEX } from './indexing.service.js';
+import { mongoKeywordSearch } from './mongo-search.service.js';
 import { buildSearchCacheKey, getCachedSearchResult, setCachedSearchResult } from './search-cache.service.js';
 
 const SEARCH_FIELDS = [
@@ -428,6 +429,8 @@ export async function searchProducts(query, { admin = false, requestId } = {}) {
     throw ApiError.badRequest('Search query "q" is required');
   }
 
+  if (env.search.mongoOnly) return mongoKeywordSearch(query, { admin });
+
   const { page, limit, skip } = getPagination(query);
   const normalizedQuery = { ...query, page, limit };
 
@@ -479,6 +482,9 @@ export async function searchProducts(query, { admin = false, requestId } = {}) {
 export async function hybridSearchProducts(query, { admin = false, requestId } = {}) {
   if (!query?.q || !query.q.trim()) {
     throw ApiError.badRequest('Search query "q" is required');
+  }
+  if (env.search.mongoOnly) {
+    throw ApiError.serviceUnavailable('Hybrid search is not available in MongoDB-only mode (SEARCH_MODE=mongo)');
   }
 
   const { page, limit, skip } = getPagination(query);
@@ -622,6 +628,9 @@ export async function semanticSearchProducts(query, { admin = false, requestId }
   if (!query?.q || !query.q.trim()) {
     throw ApiError.badRequest('Search query "q" is required');
   }
+  if (env.search.mongoOnly) {
+    throw ApiError.serviceUnavailable('Semantic search is not available in MongoDB-only mode (SEARCH_MODE=mongo)');
+  }
 
   const { page, limit, skip } = getPagination(query);
   const normalizedQuery = { ...query, page, limit };
@@ -723,7 +732,10 @@ export async function unifiedSearchProducts(query, { admin = false, requestId } 
   if (cached) return { ...cached, cached: true };
 
   let result;
-  if (mode === 'semantic') {
+  if (env.search.mongoOnly) {
+    // Whatever mode was requested, MongoDB-only deployments answer with keyword search (mode: 'keyword').
+    result = await mongoKeywordSearch(query, { admin });
+  } else if (mode === 'semantic') {
     result = await semanticSearchProducts(query, { admin, requestId });
   } else if (mode === 'bm25') {
     result = await searchProducts(query, { admin, requestId });
@@ -731,7 +743,7 @@ export async function unifiedSearchProducts(query, { admin = false, requestId } 
     result = await hybridSearchProducts(query, { admin, requestId });
   }
 
-  const cacheable = { ...result, mode };
+  const cacheable = { ...result, mode: result.mode ?? mode };
   await setCachedSearchResult(cacheKey, cacheable);
   return { ...cacheable, cached: false };
 }
