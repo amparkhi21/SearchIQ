@@ -8,7 +8,18 @@ import ProductRail from '../components/ProductRail';
 import Icon from '../components/ui/Icon';
 import { SUGGESTED_SEARCHES } from '../utils/constants';
 
-const CATEGORY_ICONS = ['bolt', 'tag', 'package', 'sparkles', 'home', 'trendUp', 'layers', 'box', 'star', 'grid'];
+const CATEGORY_ICONS = {
+  grocery: 'package',
+  clothing: 'tag',
+  footwear: 'box',
+  electronics: 'bolt',
+  beauty: 'sparkles',
+  'home-and-kitchen': 'home',
+  'sports-and-fitness': 'trendUp',
+  'stationery-and-office': 'layers',
+  'toys-and-games': 'star',
+  'bags-and-luggage': 'package',
+};
 
 const HOW = [
   { icon: 'search', title: 'Describe it naturally', text: 'Type what you mean — “black running shoes under ₹3000” — instead of guessing keywords.' },
@@ -118,11 +129,11 @@ export default function Home() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {state.loading
               ? Array.from({ length: 10 }, (_, i) => <div key={i} className="skeleton h-[72px] rounded-xl" />)
-              : state.categories.slice(0, 10).map((c, i) => (
+              : state.categories.map((c) => (
                 <Link key={c.id} to={`/search?category=${encodeURIComponent(c.slug)}`}
                   className="group flex items-center gap-3 rounded-xl border border-ink-100 bg-white p-3.5 shadow-card transition-all hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-lift">
                   <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-600 group-hover:text-white">
-                    <Icon name={CATEGORY_ICONS[i % CATEGORY_ICONS.length]} className="h-5 w-5" />
+                    <Icon name={CATEGORY_ICONS[c.slug] || 'grid'} className="h-5 w-5" />
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold text-ink-900">{c.name}</span>
