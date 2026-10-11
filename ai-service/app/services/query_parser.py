@@ -252,8 +252,11 @@ def parse_query(text: str, vocabulary_payload: dict | None = None) -> dict:
     hard = {}
     if categories:
         hard["category"] = [categories[0][0]]
-    if brands:
-        hard["brand"] = [brands[0][0]]
+    # Exact phrases and maintained aliases are high-confidence. Fuzzy vocabulary
+    # hits stay in the text query so a typo cannot become an incorrect hard filter.
+    confident_brands = [item for item in brands if item[1] >= 98]
+    if confident_brands:
+        hard["brand"] = [confident_brands[0][0]]
     if min_price is not None:
         hard["minPrice"] = round(min_price, 2)
     if max_price is not None:
@@ -270,6 +273,7 @@ def parse_query(text: str, vocabulary_payload: dict | None = None) -> dict:
     }
 
     return {
+        "originalQuery": text,
         "cleanQuery": clean_query,
         "hardFilters": hard,
         "softSignals": {

@@ -5,6 +5,7 @@ import logger from '../config/logger.js';
 import { ApiError } from '../utils/ApiError.js';
 import { PRODUCT_INDEX } from './indexing.service.js';
 import { mongoSuggestions } from './mongo-search.service.js';
+import { getCatalogSearchVersion } from './search-cache.service.js';
 
 const CACHE_PREFIX = 'search:suggest:v1:';
 
@@ -16,9 +17,10 @@ function normalize(value) {
   return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-function cacheKey(query, limit) {
+async function cacheKey(query, limit) {
   const engine = env.search.mongoOnly ? { engine: 'mongo' } : {};
-  return `${CACHE_PREFIX}${Buffer.from(JSON.stringify({ q: normalize(query), limit, ...engine })).toString('base64url')}`;
+  const version = await getCatalogSearchVersion();
+  return `${CACHE_PREFIX}${Buffer.from(JSON.stringify({ q: normalize(query), limit, version, ...engine })).toString('base64url')}`;
 }
 
 async function readCache(key) {
@@ -54,7 +56,7 @@ export async function getSearchSuggestions({ q, limit = 10 } = {}) {
   if (!query) throw ApiError.badRequest('Search suggestion query is required');
 
   const safeLimit = Math.max(1, Math.min(Number(limit) || 10, 15));
-  const key = cacheKey(query, safeLimit);
+  const key = await cacheKey(query, safeLimit);
   const cached = await readCache(key);
   if (cached) return { ...cached, cached: true };
 

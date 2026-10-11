@@ -7,6 +7,30 @@ import { buildPaginationMeta, getPagination } from '../utils/pagination.js';
 import { escapeRegExp } from '../utils/regex.js';
 import { generateUniqueSlug, slugify } from '../utils/slugify.js';
 import { idOrSlugFilter, resolveByIdOrSlug } from './lookup.service.js';
+import { indexProduct, deleteProductFromIndex } from './indexing.service.js';
+import { invalidateCatalogSearchCache } from './search-cache.service.js';
+import logger from '../config/logger.js';
+import { withRetry } from '../utils/retry.js';
+
+async function syncProduct(productId, action = 'index') {
+  await invalidateCatalogSearchCache();
+  try {
+    if (action === 'delete') {
+      await withRetry(() => deleteProductFromIndex(productId), {
+        retries: 3, delayMs: 250,
+        onRetry: (error, attempt) => logger.warn('Retrying deleted product index removal', {
+          productId: String(productId), attempt, error: error.message,
+        }),
+      });
+    } else await indexProduct(productId);
+  } catch (error) {
+    logger.error(action === 'delete'
+      ? 'Deleted product index removal failed after retries; manual index reconciliation is required'
+      : 'Product search-index synchronization failed; run search:reindex to reconcile', {
+      productId: String(productId), action, error: error.message,
+    });
+  }
+}
 
 const POPULATE = [
   { path: 'category', select: 'name slug' },
@@ -92,7 +116,8 @@ export async function buildFilter(query, { admin }) {
 
   if (query.rating !== undefined) filter.ratingAvg = { $gte: query.rating };
   if (query.minDiscount !== undefined) filter.discountPercent = { $gte: query.minDiscount };
-  if (query.inStock !== undefined) filter.inStock = query.inStock;
+  if (query.inStock === true) filter.stock = { $gt: 0 };
+  else if (query.inStock === false) filter.stock = { $lte: 0 };
 
   const tokens = tokenize(query.q);
   if (tokens.length > 0) Object.assign(filter, await buildSearchFilter(tokens));
@@ -153,6 +178,7 @@ export async function createProduct(data) {
 
   const slug = await generateUniqueSlug(Product, slugify(data.name));
   const product = await Product.create({ ...data, slug });
+  await syncProduct(product._id);
 
   await product.populate(POPULATE);
   return product;
@@ -175,6 +201,7 @@ export async function updateProduct(id, data) {
 
   // finalPrice and inStock are recalculated by the model before saving
   await product.save();
+  await syncProduct(product._id);
   await product.populate(POPULATE);
   return product;
 }
@@ -182,4 +209,5 @@ export async function updateProduct(id, data) {
 export async function deleteProduct(id) {
   const product = await Product.findByIdAndDelete(id);
   if (!product) throw ApiError.notFound('Product not found');
+  await syncProduct(id, 'delete');
 }

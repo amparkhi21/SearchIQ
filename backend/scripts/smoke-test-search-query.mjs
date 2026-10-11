@@ -13,6 +13,16 @@ async function request(path) {
   return { response, body };
 }
 
+async function expectSearch(query, predicate, label) {
+  const { response, body } = await request(`/search/query?q=${encodeURIComponent(query)}&limit=10`);
+  const results = body?.data?.results ?? [];
+  if (response.status !== 200) throw new Error(`Expected 200, got ${response.status}`);
+  if (!results.length) throw new Error('Expected relevant catalog results');
+  if (!results.some(predicate)) throw new Error('No result matched the expected product intent');
+  pass(label);
+  return results;
+}
+
 async function main() {
   console.log(`Testing unified search at ${baseUrl}`);
   console.log('');
@@ -35,6 +45,75 @@ async function main() {
     pass('default unified search uses hybrid mode');
   } catch (error) {
     fail('default unified search uses hybrid mode', error);
+  }
+
+  try {
+    const { response, body } = await request('/search/query?q=running%20shoes');
+    const results = body?.data?.results ?? [];
+    if (response.status !== 200) throw new Error(`Expected 200, got ${response.status}`);
+    if (!results.length) throw new Error('Expected indexed Footwear products after a supported reindex');
+    if (results.some((product) => product.category?.slug !== 'footwear')) {
+      throw new Error('Natural-language category inference returned a product outside Footwear');
+    }
+    pass('inferred Footwear filter matches reindexed products');
+  } catch (error) {
+    fail('inferred Footwear filter matches reindexed products', error);
+  }
+
+  try {
+    const results = await expectSearch(
+      'comfortable black shoes for college under 2500',
+      (product) => product.category?.slug === 'footwear' && Number(product.finalPrice) <= 2500,
+      'natural language keeps footwear intent and enforces its price ceiling',
+    );
+    if (results.some((product) => product.category?.slug !== 'footwear' || Number(product.finalPrice) > 2500)) {
+      throw new Error('Category or maximum price constraint leaked results');
+    }
+  } catch (error) {
+    fail('natural language keeps footwear intent and enforces its price ceiling', error);
+  }
+
+  try {
+    await expectSearch(
+      'wireless earbuds with good bass',
+      (product) => /earbud|headphone/i.test(product.name),
+      'semantic wording retrieves earbuds or headphones',
+    );
+  } catch (error) {
+    fail('semantic wording retrieves earbuds or headphones', error);
+  }
+
+  try {
+    const results = await expectSearch(
+      'laptop for coding under 60000',
+      (product) => /laptop/i.test(product.name) && Number(product.finalPrice) <= 60000,
+      'coding laptop intent respects the maximum price',
+    );
+    if (results.some((product) => Number(product.finalPrice) > 60000)) {
+      throw new Error('Maximum price constraint leaked results');
+    }
+  } catch (error) {
+    fail('coding laptop intent respects the maximum price', error);
+  }
+
+  try {
+    await expectSearch(
+      'shoes for daily walking',
+      (product) => product.category?.slug === 'footwear',
+      'synonymous daily-walking query retrieves footwear',
+    );
+  } catch (error) {
+    fail('synonymous daily-walking query retrieves footwear', error);
+  }
+
+  try {
+    await expectSearch(
+      'runing shose',
+      (product) => product.category?.slug === 'footwear' || /shoe/i.test(product.name),
+      'misspelled query can still retrieve relevant shoes',
+    );
+  } catch (error) {
+    fail('misspelled query can still retrieve relevant shoes', error);
   }
 
   try {

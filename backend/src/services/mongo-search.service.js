@@ -40,7 +40,7 @@ export function productToSearchResult(product, extra = {}) {
     soldCount: product.soldCount,
     stock: product.stock,
     lowStockThreshold: product.lowStockThreshold,
-    inStock: product.inStock,
+    inStock: Number(product.stock ?? 0) > 0,
     stockStatus: stockStatusOf(product),
     isActive: product.isActive,
     images: (product.images ?? []).map((image) => ({

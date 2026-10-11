@@ -3,6 +3,7 @@ import { getRedisClient } from '../config/redis.js';
 import logger from '../config/logger.js';
 
 const PREFIX = 'search:result:v1:';
+const VERSION_KEY = 'search:catalog-version:v1';
 
 function normalize(value) {
   if (Array.isArray(value)) return value.map(normalize);
@@ -18,16 +19,31 @@ function normalize(value) {
   return value;
 }
 
-export function buildSearchCacheKey(query, { mode = 'hybrid', admin = false } = {}) {
+export async function buildSearchCacheKey(query, { mode = 'hybrid', admin = false } = {}) {
+  const version = await getCatalogSearchVersion();
   const payload = normalize({
     mode,
     admin: Boolean(admin),
     query,
+    version,
     embeddingVersion: env.search.embeddingVersion,
     textVersion: env.search.textVersion,
     ...(env.search.mongoOnly ? { engine: 'mongo' } : {}),
   });
   return `${PREFIX}${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
+}
+
+export async function invalidateCatalogSearchCache() {
+  try { await getRedisClient().incr(VERSION_KEY); }
+  catch (error) { logger.warn('Search cache invalidation failed', { error: error.message }); }
+}
+
+export async function getCatalogSearchVersion() {
+  try { return String((await getRedisClient().get(VERSION_KEY)) ?? '0'); }
+  catch (error) {
+    logger.warn('Search cache version read failed', { error: error.message });
+    return '0';
+  }
 }
 
 export async function getCachedSearchResult(key) {

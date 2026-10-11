@@ -23,7 +23,10 @@ def analyze(payload: QueryRequest):
         payload.vocabulary.model_dump(by_alias=True),
     )
     service = get_embedding_service()
-    vector = service.embed_query(parsed["cleanQuery"])
+    # Keep the complete request in the semantic representation. The parsed
+    # query is useful for filters and display, but removing recognized terms
+    # such as "running" can erase the exact intent that should guide retrieval.
+    vector = service.embed_query(payload.query)
     data = {
         **parsed,
         "embedding": vector,

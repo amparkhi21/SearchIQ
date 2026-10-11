@@ -8,6 +8,7 @@ import { buildPaginationMeta, getPagination } from '../utils/pagination.js';
 import { createNotification } from './notification.service.js';
 import { updateProductSearchFacts } from './indexing.service.js';
 import logger from '../config/logger.js';
+import { invalidateCatalogSearchCache } from './search-cache.service.js';
 
 const SHIPPING_THRESHOLD = 999;
 const SHIPPING_FEE = 49;
@@ -49,8 +50,14 @@ async function getShippingAddress(userId, addressId) {
 }
 
 async function rollbackStock(changes) {
-  await Promise.all(changes.map(({ productId, quantity }) =>
-    Product.updateOne({ _id: productId }, { $inc: { stock: quantity, soldCount: -quantity } })));
+  await Promise.all(changes.map(({ productId, quantity }) => Product.updateOne(
+    { _id: productId },
+    [
+      { $set: { stock: { $add: ['$stock', quantity] }, soldCount: { $max: [0, { $subtract: ['$soldCount', quantity] }] } } },
+      { $set: { inStock: { $gt: ['$stock', 0] } } },
+    ],
+  )));
+  await syncInventoryAfterChange(changes.map(({ productId }) => productId));
 }
 
 async function syncInventoryAfterChange(productIds) {
@@ -66,7 +73,7 @@ async function syncInventoryAfterChange(productIds) {
       await updateProductSearchFacts(productId, {
         stock: product.stock,
         lowStockThreshold: product.lowStockThreshold,
-        inStock: product.inStock,
+        inStock: product.stock > 0,
         stockStatus,
         soldCount: product.soldCount,
       });
@@ -76,6 +83,7 @@ async function syncInventoryAfterChange(productIds) {
       logger.warn('Search inventory sync failed', { error: result.reason?.message });
     });
   });
+  await invalidateCatalogSearchCache();
 }
 
 export async function createOrder(user, { addressId, paymentMethod }) {
@@ -100,7 +108,10 @@ export async function createOrder(user, { addressId, paymentMethod }) {
     const qty = item.quantity;
     const updated = await Product.findOneAndUpdate(
       { _id: product._id, isActive: true, stock: { $gte: qty } },
-      { $inc: { stock: -qty, soldCount: qty } },
+      [
+        { $set: { stock: { $subtract: ['$stock', qty] }, soldCount: { $add: ['$soldCount', qty] } } },
+        { $set: { inStock: { $gt: ['$stock', 0] } } },
+      ],
       { new: true },
     ).select('name sku images price finalPrice');
     if (!updated) {
@@ -181,7 +192,10 @@ export async function cancelOrder(user, orderId, reason) {
   if (!ALLOWED_CANCEL_STATUSES.has(order.status)) throw ApiError.badRequest('This order can no longer be cancelled');
 
   for (const item of order.items) {
-    await Product.updateOne({ _id: item.product }, { $inc: { stock: item.quantity, soldCount: -item.quantity } });
+    await Product.updateOne({ _id: item.product }, [
+      { $set: { stock: { $add: ['$stock', item.quantity] }, soldCount: { $max: [0, { $subtract: ['$soldCount', item.quantity] }] } } },
+      { $set: { inStock: { $gt: ['$stock', 0] } } },
+    ]);
   }
   order.status = 'cancelled';
   order.cancelledAt = new Date();

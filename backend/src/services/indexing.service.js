@@ -7,6 +7,7 @@ import Brand from '../models/Brand.js';
 import Category from '../models/Category.js';
 import Product from '../models/Product.js';
 import * as aiService from './ai.service.js';
+import { invalidateCatalogSearchCache } from './search-cache.service.js';
 
 export const PRODUCT_INDEX = env.search.indexName;
 
@@ -176,14 +177,12 @@ export function toSearchDocument(product, embeddingResult) {
     soldCount: plain?.soldCount ?? 0,
     stock: plain?.stock ?? 0,
     lowStockThreshold: plain?.lowStockThreshold ?? 5,
-    inStock: plain?.inStock ?? false,
-    stockStatus:
-      plain?.stockStatus ??
-      (plain?.stock > 0
-        ? plain.stock <= (plain?.lowStockThreshold ?? 5)
-          ? 'low_stock'
-          : 'in_stock'
-        : 'out_of_stock'),
+    inStock: Number(plain?.stock ?? 0) > 0,
+    stockStatus: Number(plain?.stock ?? 0) <= 0
+      ? 'out_of_stock'
+      : Number(plain.stock) <= Number(plain?.lowStockThreshold ?? 5)
+        ? 'low_stock'
+        : 'in_stock',
     isActive: plain?.isActive ?? true,
     attributes: {
       color: attributes.color,
@@ -424,6 +423,9 @@ export async function reindexProducts({
   }
 
   const stats = await getProductIndexStats();
+  // Upsert reindexing repairs stale category IDs and other indexed catalog facts.
+  // Version the cache only after the refreshed documents are visible.
+  await invalidateCatalogSearchCache();
   logger.info(
     `OpenSearch reindex complete: processed=${processed}, indexed=${indexed}, failed=${failed}, total=${stats.count}`,
   );

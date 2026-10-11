@@ -16,7 +16,7 @@ const mk = (n, name, cat, brand, price, sold, extra = {}) => ({
 });
 export const products = [
   mk(1, 'Nike Running Shoes', cats[0], brands[0], 5000, 90), mk(2, 'Nike Casual Sneakers', cats[0], brands[0], 4000, 50),
-  mk(3, 'Sony Headphones', cats[1], brands[1], 9000, 70, { tags: ['audio'] }), mk(4, 'Hidden Nike Boots', cats[0], brands[0], 3000, 10, { isActive: false }),
+  mk(3, 'Sony Headphones', cats[1], brands[1], 9000, 70, { tags: ['audio'], stock: 0, inStock: false }), mk(4, 'Hidden Nike Boots', cats[0], brands[0], 3000, 10, { isActive: false }),
 ];
 
 // Tiny chainable query: filter -> sort -> skip -> limit -> populate -> lean, awaitable.
@@ -36,7 +36,7 @@ const matches = (doc, filter) => Object.entries(filter).every(([key, cond]) => {
   if (key === '$or') return cond.some((c) => matches(doc, c));
   const value = key.split('.').reduce((o, k) => o?.[k], doc);
   const test = (v) => (cond instanceof RegExp ? cond.test(String(v)) : cond && typeof cond === 'object' && !cond._bsontype && !(cond instanceof Date) && !Array.isArray(cond)
-    ? Object.entries(cond).every(([op, arg]) => ({ $gte: (x) => x >= arg, $lte: (x) => x <= arg, $ne: (x) => String(x) !== String(arg), $in: (x) => arg.some((a) => String(a?._id ?? a) === String(x?._id ?? x)), $nin: (x) => !arg.some((a) => String(a) === String(x)) })[op](v))
+    ? Object.entries(cond).every(([op, arg]) => ({ $gt: (x) => x > arg, $gte: (x) => x >= arg, $lt: (x) => x < arg, $lte: (x) => x <= arg, $ne: (x) => String(x?._id ?? x) !== String(arg?._id ?? arg), $in: (x) => arg.some((a) => String(a?._id ?? a) === String(x?._id ?? x)), $nin: (x) => !arg.some((a) => String(a) === String(x)) })[op](v))
     : String(v?._id ?? v) === String(cond));
   return Array.isArray(value) ? value.some(test) : test(value);
 });

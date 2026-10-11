@@ -44,6 +44,11 @@ function reply([command, ...args], store) {
     case 'PING': return '+PONG\r\n';
     case 'INFO': return bulk('# Server\r\nredis_version:7.2.4\r\nloading:0\r\n');
     case 'GET': return store.has(args[0]) ? bulk(store.get(args[0])) : '$-1\r\n';
+    case 'INCR': {
+      const value = Number(store.get(args[0]) ?? 0) + 1;
+      store.set(args[0], String(value));
+      return `:${value}\r\n`;
+    }
     case 'SET': store.set(args[0], args[1]); return '+OK\r\n';
     case 'DEL': return `:${args.filter((key) => store.delete(key)).length}\r\n`;
     case 'SCAN': return '*2\r\n$1\r\n0\r\n*0\r\n';

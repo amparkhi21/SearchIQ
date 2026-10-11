@@ -1,4 +1,5 @@
 import { env } from '../config/env.js';
+import logger from '../config/logger.js';
 import { getOpenSearchClient } from '../config/opensearch.js';
 import * as aiService from './ai.service.js';
 import Brand from '../models/Brand.js';
@@ -101,6 +102,19 @@ function buildTextQuery(q) {
             fields: ['name^6', 'brandName^5', 'categoryName^4', 'searchableText^2'],
             type: 'bool_prefix',
             boost: 1.5,
+          },
+        },
+        {
+          multi_match: {
+            query: trimmed,
+            fields: ['name^4', 'brandName^3', 'categoryName^2', 'searchableText'],
+            type: 'best_fields',
+            fuzziness: 'AUTO',
+            prefix_length: 1,
+            max_expansions: 25,
+            operator: 'or',
+            minimum_should_match: '70%',
+            boost: 0.7,
           },
         },
       ],
@@ -315,18 +329,37 @@ async function ensureSearchIndex(client) {
 
 async function resolveCategoryIds(input) {
   if (!input) return null;
-  const categories = await resolveByIdOrSlug(Category, input, 'Category');
-  const ids = categories.map((category) => String(category._id));
-  const childIds = await Category.find({ parent: { $in: categories.map((category) => category._id) } })
-    .select('_id')
+  const values = String(input).split(',').map((value) => value.trim()).filter(Boolean);
+  const ids = values.filter((value) => /^[a-f\d]{24}$/i.test(value));
+  const slugs = values.filter((value) => !/^[a-f\d]{24}$/i.test(value)).map((value) => value.toLowerCase());
+  const categories = await Category.find({
+    $or: [
+      { _id: { $in: ids } },
+      { slug: { $in: slugs } },
+      { name: { $in: values } },
+    ],
+  }).select('_id slug name').lean();
+  const known = new Set(categories.flatMap((category) => [String(category._id), category.slug, category.name.toLowerCase()]));
+  const missing = values.filter((value) => !known.has(value.toLowerCase()));
+  if (missing.length) throw ApiError.notFound(`Category not found: ${missing.join(', ')}`);
+
+  const childCategories = await Category.find({ parent: { $in: categories.map((category) => category._id) } })
+    .select('_id slug name')
     .lean();
-  return [...new Set([...ids, ...childIds.map((child) => String(child._id))])];
+  const allCategories = [...categories, ...childCategories];
+  return {
+    ids: [...new Set(allCategories.map((category) => String(category._id)))],
+    slugs: [...new Set(allCategories.map((category) => category.slug).filter(Boolean))],
+  };
 }
 
 async function resolveBrandIds(input) {
   if (!input) return null;
   const brands = await resolveByIdOrSlug(Brand, input, 'Brand');
-  return [...new Set(brands.map((brand) => String(brand._id)))];
+  return {
+    ids: [...new Set(brands.map((brand) => String(brand._id)))],
+    slugs: [...new Set(brands.map((brand) => brand.slug).filter(Boolean))],
+  };
 }
 
 async function buildFilters(query, { admin }) {
@@ -343,8 +376,18 @@ async function buildFilters(query, { admin }) {
     resolveBrandIds(query.brand),
   ]);
 
-  if (categoryIds?.length) filters.push({ terms: { categoryId: categoryIds } });
-  if (brandIds?.length) filters.push({ terms: { brandId: brandIds } });
+  if (categoryIds?.ids.length || categoryIds?.slugs.length) {
+    const categoryShould = [];
+    if (categoryIds.ids.length) categoryShould.push({ terms: { categoryId: categoryIds.ids } });
+    if (categoryIds.slugs.length) categoryShould.push({ terms: { categorySlug: categoryIds.slugs } });
+    filters.push({ bool: { should: categoryShould, minimum_should_match: 1 } });
+  }
+  if (brandIds?.ids.length || brandIds?.slugs.length) {
+    const brandShould = [];
+    if (brandIds.ids.length) brandShould.push({ terms: { brandId: brandIds.ids } });
+    if (brandIds.slugs.length) brandShould.push({ terms: { brandSlug: brandIds.slugs } });
+    filters.push({ bool: { should: brandShould, minimum_should_match: 1 } });
+  }
 
   if (query.minPrice !== undefined || query.maxPrice !== undefined) {
     const range = {};
@@ -357,7 +400,12 @@ async function buildFilters(query, { admin }) {
   if (query.minDiscount !== undefined) {
     filters.push({ range: { discountPercent: { gte: query.minDiscount } } });
   }
-  if (query.inStock !== undefined) filters.push({ term: { inStock: query.inStock } });
+  if (query.inStock === true) {
+    filters.push({ range: { stock: { gt: 0 } } });
+    filters.push({ term: { inStock: true } });
+  } else if (query.inStock === false) {
+    filters.push({ range: { stock: { lte: 0 } } });
+  }
 
   return filters;
 }
@@ -524,12 +572,42 @@ export async function hybridSearchProducts(query, { admin = false, requestId } =
     const total = Number(responseBody(countResponse)?.count ?? 0);
 
     if (total === 0) {
+      let activeIndexCount = null;
+      try {
+        const activeResponse = await client.count({
+          index: PRODUCT_INDEX,
+          body: { query: { term: { isActive: true } } },
+        });
+        activeIndexCount = Number(responseBody(activeResponse)?.count ?? 0);
+      } catch (diagnosticError) {
+        logger.warn('Hybrid zero-result index diagnostic failed', {
+          requestId,
+          error: diagnosticError.message,
+        });
+      }
+      logger.warn('Hybrid search filters matched no indexed products', {
+        requestId,
+        query: normalizedQuery.q.trim().slice(0, 120),
+        normalizedQuery: String(analysis.cleanQuery ?? '').slice(0, 120),
+        inferredFilters: analysis.hardFilters ?? {},
+        selectedFilters: {
+          category: filterQuery.category,
+          brand: filterQuery.brand,
+          minPrice: filterQuery.minPrice,
+          maxPrice: filterQuery.maxPrice,
+          inStock: filterQuery.inStock,
+        },
+        activeIndexCount,
+        filteredIndexCount: total,
+      });
       return {
         results: [],
         meta: buildPaginationMeta({ total, page, limit }),
         query: normalizedQuery.q.trim(),
         mode: 'hybrid',
         analysis: {
+          originalQuery: analysis.originalQuery ?? normalizedQuery.q.trim(),
+          normalizedQuery: analysis.cleanQuery,
           cleanQuery: analysis.cleanQuery,
           hardFilters: analysis.hardFilters,
           softSignals: analysis.softSignals,
@@ -546,7 +624,10 @@ export async function hybridSearchProducts(query, { admin = false, requestId } =
     }
 
     const candidateK = Math.min(1000, Math.max(env.search.hybridCandidateK, skip + limit));
-    const keyword = analysis.cleanQuery?.trim() || normalizedQuery.q.trim();
+    // The parser's clean query is useful for intent display, but it can remove
+    // terms such as "running" that remain valuable BM25 evidence. Search the
+    // original user wording and use the parsed form only if it is unavailable.
+    const keyword = analysis.originalQuery?.trim() || normalizedQuery.q.trim() || analysis.cleanQuery?.trim();
     const bm25Body = {
       size: Math.min(candidateK, total),
       track_total_hits: false,
@@ -572,13 +653,27 @@ export async function hybridSearchProducts(query, { admin = false, requestId } =
       _source: true,
     };
 
-    const [bm25Response, vectorResponse] = await Promise.all([
+    const [bm25Outcome, vectorOutcome] = await Promise.allSettled([
       client.search({ index: PRODUCT_INDEX, body: bm25Body }),
       client.search({ index: PRODUCT_INDEX, body: vectorBody }),
     ]);
 
-    const bm25Hits = responseBody(bm25Response)?.hits?.hits ?? [];
-    const vectorHits = responseBody(vectorResponse)?.hits?.hits ?? [];
+    if (bm25Outcome.status === 'rejected' && vectorOutcome.status === 'rejected') {
+      throw bm25Outcome.reason;
+    }
+    const bm25Hits = bm25Outcome.status === 'fulfilled'
+      ? responseBody(bm25Outcome.value)?.hits?.hits ?? []
+      : [];
+    const vectorHits = vectorOutcome.status === 'fulfilled'
+      ? responseBody(vectorOutcome.value)?.hits?.hits ?? []
+      : [];
+    if (bm25Outcome.status === 'rejected' || vectorOutcome.status === 'rejected') {
+      logger.warn('Hybrid search retrieval branch failed; using available candidates', {
+        requestId,
+        bm25Failed: bm25Outcome.status === 'rejected',
+        vectorFailed: vectorOutcome.status === 'rejected',
+      });
+    }
     const fused = fuseHybridCandidates(bm25Hits, vectorHits, {
       bm25Weight: env.search.hybridBm25Weight,
       vectorWeight: env.search.hybridVectorWeight,
@@ -603,6 +698,8 @@ export async function hybridSearchProducts(query, { admin = false, requestId } =
       query: normalizedQuery.q.trim(),
       mode: 'hybrid',
       analysis: {
+        originalQuery: analysis.originalQuery ?? normalizedQuery.q.trim(),
+        normalizedQuery: analysis.cleanQuery,
         cleanQuery: analysis.cleanQuery,
         hardFilters: analysis.hardFilters,
         softSignals: analysis.softSignals,
@@ -727,7 +824,7 @@ export async function unifiedSearchProducts(query, { admin = false, requestId } 
     throw ApiError.badRequest('Search mode must be bm25, semantic or hybrid');
   }
 
-  const cacheKey = buildSearchCacheKey(query, { mode, admin });
+  const cacheKey = await buildSearchCacheKey(query, { mode, admin });
   const cached = await getCachedSearchResult(cacheKey);
   if (cached) return { ...cached, cached: true };
 

@@ -4,6 +4,23 @@ import Product from '../models/Product.js';
 import { ApiError } from '../utils/ApiError.js';
 import { buildPaginationMeta, getPagination } from '../utils/pagination.js';
 import { createNotification } from './notification.service.js';
+import { updateProductSearchFacts } from './indexing.service.js';
+import { invalidateCatalogSearchCache } from './search-cache.service.js';
+import logger from '../config/logger.js';
+
+async function restoreInventoryItem(productId, quantity) {
+  await Product.updateOne({ _id: productId }, [
+    { $set: { stock: { $add: ['$stock', quantity] }, soldCount: { $max: [0, { $subtract: ['$soldCount', quantity] }] } } },
+    { $set: { inStock: { $gt: ['$stock', 0] } } },
+  ]);
+  const product = await Product.findById(productId).select('stock lowStockThreshold soldCount').lean();
+  if (product) {
+    const stockStatus = product.stock <= 0 ? 'out_of_stock' : product.stock <= product.lowStockThreshold ? 'low_stock' : 'in_stock';
+    try { await updateProductSearchFacts(productId, { stock: product.stock, inStock: product.stock > 0, stockStatus, soldCount: product.soldCount }); }
+    catch (error) { logger.warn('Admin cancellation inventory search sync failed', { productId: String(productId), error: error.message }); }
+  }
+  await invalidateCatalogSearchCache();
+}
 
 const TRANSITIONS = Object.freeze({
   placed: new Set(['confirmed', 'cancelled']),
@@ -42,7 +59,7 @@ export async function updateOrderStatus(orderId, nextStatus, note) {
 
   if (nextStatus === 'cancelled') {
     for (const item of order.items) {
-      await Product.updateOne({ _id: item.product }, { $inc: { stock: item.quantity, soldCount: -item.quantity } });
+      await restoreInventoryItem(item.product, item.quantity);
     }
     if (order.paymentStatus === 'paid') order.paymentStatus = 'refunded';
     order.cancelledAt = new Date();

@@ -107,6 +107,15 @@ await test('category, brand, price and stock filters work', async () => {
   assert.equal((await get('/search/query?q=nike&category=nope')).status, 404);
 });
 
+await test('sold-out products remain browseable but strict stock filters exclude them', async () => {
+  const browse = await get('/search/query?q=sony');
+  assert.equal(browse.body.meta.total, 1);
+  assert.equal(browse.body.data.results[0].inStock, false);
+  assert.equal(browse.body.data.results[0].stockStatus, 'out_of_stock');
+  assert.equal((await get('/search/query?q=sony&inStock=true')).body.meta.total, 0);
+  assert.equal((await get('/search/query?q=sony&inStock=false')).body.meta.total, 1);
+});
+
 await test('multi-word, no-match and missing-query cases', async () => {
   assert.equal((await get('/search/query?q=running%20shoes')).body.data.results.length, 1);
   const none = await get('/search/query?q=zzzzzz');
