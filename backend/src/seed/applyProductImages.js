@@ -1,7 +1,6 @@
-// Image-only update: writes curated images (manifest + overrides) onto EXISTING products by SKU.
+// Image-only update: writes verified exact overrides onto EXISTING products by SKU.
 // It only $sets `images`; prices, stock, ratings, reviews, orders, brands and categories are never touched,
-// nothing is inserted or deleted, and uncurated non-seed images are preserved. Known generic seed photos
-// are cleared when there is no curated replacement, so they cannot masquerade as product-specific photos.
+// nothing is inserted or deleted. Existing images remain untouched when there is no verified replacement.
 //
 //   npm run images:apply -- --dry-run     show what would change
 //   npm run images:apply                  update MongoDB, then OpenSearch (images field only), then clear search cache
@@ -15,11 +14,11 @@ import Product from '../models/Product.js';
 import { updateProductSearchFacts } from '../services/indexing.service.js';
 import { buildCatalog } from './data/catalog.builder.js';
 import { loadImageAssignments } from './data/imageManifest.js';
+import { planProductImageUpdates } from './imageApplyPlan.js';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const SKIP_INDEX = process.argv.includes('--skip-index');
 const SEARCH_CACHE_PREFIX = 'search:result:v1:';
-
 async function clearSearchCache() {
   try {
     await connectRedis();
@@ -43,39 +42,11 @@ async function applyImages() {
 
   await connectMongo();
   const products = await Product.find({ sku: { $in: catalogSkus } }).select('_id sku name images');
-  const bySku = new Map(products.map((product) => [product.sku, product]));
-
-  const operations = [];
-  const changedIds = [];
-  const skipped = { missing: [], nameMismatch: [], unchanged: 0 };
-  let legacyFallbacksCleared = 0;
-
-  for (const [sku, { image, name }] of assignments) {
-    const product = bySku.get(sku);
-    if (!product) { skipped.missing.push(sku); continue; }
-    // Guard against a catalog edit shifting SKUs: never put one product's photo on another product.
-    if (name && name !== product.name) { skipped.nameMismatch.push(`${sku} (db "${product.name}" vs manifest "${name}")`); continue; }
-    const current = product.images?.[0];
-    if (product.images?.length === 1 && current?.url === image.url) { skipped.unchanged += 1; continue; }
-    operations.push({ updateOne: { filter: { sku }, update: { $set: { images: [image] } } } });
-    changedIds.push(product._id.toString());
-  }
-
-  for (const product of products) {
-    if (assignments.has(product.sku)) continue;
-    const image = product.images?.length === 1 ? product.images[0] : null;
-    const isKnownSeedFallback = image?.url?.startsWith('https://images.unsplash.com/')
-      && image.alt?.startsWith(`${product.name} - general `)
-      && image.alt.endsWith(' photo');
-    if (!isKnownSeedFallback) continue;
-    operations.push({ updateOne: { filter: { sku: product.sku }, update: { $set: { images: [] } } } });
-    changedIds.push(product._id.toString());
-    legacyFallbacksCleared += 1;
-  }
+  const { operations, changedIds, skipped, preservedCount } = planProductImageUpdates(products, assignments);
 
   logger.info(
-    `${assignments.size} curated images: ${operations.length - legacyFallbacksCleared} to update, ` +
-      `${legacyFallbacksCleared} known generic seed photos to clear, ${skipped.unchanged} already current, ` +
+    `${assignments.size} verified exact images: ${operations.length} to update, ` +
+      `${preservedCount} products preserved without an exact mapping, ${skipped.unchanged} already current, ` +
       `${skipped.missing.length} SKUs not in database, ${skipped.nameMismatch.length} name mismatches`,
   );
   skipped.missing.slice(0, 10).forEach((sku) => logger.warn(`  not in database: ${sku}`));

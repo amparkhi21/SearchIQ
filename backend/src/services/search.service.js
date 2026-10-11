@@ -265,26 +265,43 @@ function hybridSortResults(results, sort) {
   return results.sort(compare);
 }
 
-function fuseHybridCandidates(bm25Hits, vectorHits, { bm25Weight, vectorWeight, rrfK }) {
-  const byId = new Map();
-  bm25Hits.forEach((hit, index) => {
-    const id = hit?._source?.productId;
-    if (!id) return;
-    const existing = byId.get(id) ?? { source: hit._source, bm25Rank: null, semanticRank: null, relevanceScore: null, semanticScore: null };
-    existing.bm25Rank = index + 1;
-    existing.relevanceScore = typeof hit._score === 'number' ? hit._score : null;
-    byId.set(id, existing);
-  });
-  vectorHits.forEach((hit, index) => {
-    const id = hit?._source?.productId;
-    if (!id) return;
-    const existing = byId.get(id) ?? { source: hit._source, bm25Rank: null, semanticRank: null, relevanceScore: null, semanticScore: null };
-    existing.semanticRank = index + 1;
-    existing.semanticScore = typeof hit._score === 'number' ? hit._score : null;
-    byId.set(id, existing);
-  });
+export function fuseHybridCandidates(bm25Hits, vectorHits, { bm25Weight, vectorWeight, rrfK }) {
+  const candidates = new Set();
+  const byProductId = new Map();
+  const bySku = new Map();
+  const getCandidate = (hit) => {
+    const source = hit?._source ?? {};
+    const productId = String(source.productId ?? '').trim();
+    const sku = String(source.sku ?? '').trim().toUpperCase();
+    if (!productId && !sku) return null;
+    let item = (productId && byProductId.get(productId)) || (sku && bySku.get(sku));
+    if (!item) {
+      item = { source, sourceDocumentId: hit?._id, bm25Rank: null, semanticRank: null, relevanceScore: null, semanticScore: null };
+      candidates.add(item);
+    } else if (String(hit?._id ?? '') === productId && String(item.sourceDocumentId ?? '') !== productId) {
+      // Prefer the canonical upsert document if an older duplicate is also indexed.
+      item.source = source;
+      item.sourceDocumentId = hit._id;
+    }
+    if (productId) byProductId.set(productId, item);
+    if (sku) bySku.set(sku, item);
+    return item;
+  };
+  const addBranch = (hits, rankField, scoreField) => {
+    const seen = new Set();
+    let rank = 0;
+    for (const hit of hits ?? []) {
+      const item = getCandidate(hit);
+      if (!item || seen.has(item)) continue;
+      seen.add(item);
+      item[rankField] = ++rank;
+      item[scoreField] = typeof hit?._score === 'number' ? hit._score : null;
+    }
+  };
+  addBranch(bm25Hits, 'bm25Rank', 'relevanceScore');
+  addBranch(vectorHits, 'semanticRank', 'semanticScore');
 
-  return [...byId.values()].map((item) => {
+  return [...candidates].map((item) => {
     const bm25Contribution = item.bm25Rank ? bm25Weight / (rrfK + item.bm25Rank) : 0;
     const vectorContribution = item.semanticRank ? vectorWeight / (rrfK + item.semanticRank) : 0;
     return {
@@ -325,6 +342,24 @@ async function ensureSearchIndex(client) {
   if (!Boolean(responseBody(existsResponse))) {
     throw ApiError.serviceUnavailable('Search index is unavailable; run the reindex command first');
   }
+}
+
+async function countUniqueProducts(client, query) {
+  const response = await client.search({
+    index: PRODUCT_INDEX,
+    body: {
+      size: 0,
+      track_total_hits: false,
+      query,
+      aggs: {
+        unique_products: {
+          cardinality: { field: 'sku', precision_threshold: 40000 },
+        },
+      },
+    },
+  });
+  const body = responseBody(response);
+  return Number(body?.aggregations?.unique_products?.value ?? body?.hits?.total?.value ?? 0);
 }
 
 async function resolveCategoryIds(input) {
@@ -472,6 +507,34 @@ export function toSearchResult(hit) {
   };
 }
 
+export function uniqueSearchHits(hits) {
+  const positions = new Map();
+  const unique = [];
+  for (const hit of hits ?? []) {
+    const source = hit?._source ?? {};
+    const key = source.sku
+      ? `sku:${String(source.sku).trim().toUpperCase()}`
+      : source.productId
+        ? `id:${String(source.productId)}`
+        : hit?._id
+          ? `doc:${String(hit._id)}`
+          : null;
+    if (!key) continue;
+    if (!positions.has(key)) {
+      positions.set(key, unique.length);
+      unique.push(hit);
+      continue;
+    }
+    const index = positions.get(key);
+    const previous = unique[index];
+    if (String(hit?._id ?? '') === String(source.productId ?? '')
+      && String(previous?._id ?? '') !== String(previous?._source?.productId ?? '')) {
+      unique[index] = { ...hit, _score: previous?._score ?? hit?._score };
+    }
+  }
+  return unique;
+}
+
 export async function searchProducts(query, { admin = false, requestId } = {}) {
   if (!query?.q || !query.q.trim()) {
     throw ApiError.badRequest('Search query "q" is required');
@@ -495,9 +558,14 @@ export async function searchProducts(query, { admin = false, requestId } = {}) {
   try {
     const filters = await buildFilters(normalizedQuery, { admin });
     const body = {
-      from: skip,
-      size: limit,
+      from: 0,
+      size: Math.min(1000, Math.max(limit, (skip + limit) * 3)),
       track_total_hits: true,
+      aggs: {
+        unique_products: {
+          cardinality: { field: 'sku', precision_threshold: 40000 },
+        },
+      },
       query: {
         bool: {
           must: [buildTextQuery(normalizedQuery.q)],
@@ -512,10 +580,12 @@ export async function searchProducts(query, { admin = false, requestId } = {}) {
     const result = responseBody(response);
     const hits = result?.hits?.hits ?? [];
     const totalRaw = result?.hits?.total;
-    const total = typeof totalRaw === 'number' ? totalRaw : Number(totalRaw?.value ?? 0);
+    const total = Number(result?.aggregations?.unique_products?.value
+      ?? (typeof totalRaw === 'number' ? totalRaw : totalRaw?.value)
+      ?? 0);
 
     return {
-      results: hits.map(toSearchResult),
+      results: uniqueSearchHits(hits).slice(skip, skip + limit).map(toSearchResult),
       meta: buildPaginationMeta({ total, page, limit }),
       query: normalizedQuery.q.trim(),
       sort: normalizedQuery.sort ?? 'relevance',
@@ -567,9 +637,8 @@ export async function hybridSearchProducts(query, { admin = false, requestId } =
   const filters = await buildFilters(filterQuery, { admin });
 
   try {
-    const countBody = { query: { bool: { filter: filters } } };
-    const countResponse = await client.count({ index: PRODUCT_INDEX, body: countBody });
-    const total = Number(responseBody(countResponse)?.count ?? 0);
+    const countQuery = { bool: { filter: filters } };
+    const total = await countUniqueProducts(client, countQuery);
 
     if (total === 0) {
       let activeIndexCount = null;
@@ -623,13 +692,13 @@ export async function hybridSearchProducts(query, { admin = false, requestId } =
       };
     }
 
-    const candidateK = Math.min(1000, Math.max(env.search.hybridCandidateK, skip + limit));
+    const candidateK = Math.min(1000, Math.max(env.search.hybridCandidateK, (skip + limit) * 3));
     // The parser's clean query is useful for intent display, but it can remove
     // terms such as "running" that remain valuable BM25 evidence. Search the
     // original user wording and use the parsed form only if it is unavailable.
     const keyword = analysis.originalQuery?.trim() || normalizedQuery.q.trim() || analysis.cleanQuery?.trim();
     const bm25Body = {
-      size: Math.min(candidateK, total),
+      size: candidateK,
       track_total_hits: false,
       query: {
         bool: {
@@ -647,9 +716,9 @@ export async function hybridSearchProducts(query, { admin = false, requestId } =
     };
 
     const vectorBody = {
-      size: Math.min(candidateK, total),
+      size: candidateK,
       track_total_hits: false,
-      query: buildVectorKnnQuery(analysis.embedding, Math.min(candidateK, total), filters),
+      query: buildVectorKnnQuery(analysis.embedding, candidateK, filters),
       _source: true,
     };
 
@@ -768,12 +837,10 @@ export async function semanticSearchProducts(query, { admin = false, requestId }
   try {
     // Count filtered documents separately because kNN's hit count reflects the candidate set,
     // not necessarily the complete number of matching documents.
-    const countBody = filters.length > 0
+    const countQuery = filters.length > 0
       ? { query: { bool: { filter: filters } } }
       : { query: { match_all: {} } };
-    const countResponse = await client.count({ index: PRODUCT_INDEX, body: countBody });
-    const countResult = responseBody(countResponse);
-    const total = Number(countResult?.count ?? 0);
+    const total = await countUniqueProducts(client, countQuery.query);
 
     if (total === 0) {
       return {
@@ -786,10 +853,10 @@ export async function semanticSearchProducts(query, { admin = false, requestId }
       };
     }
 
-    const requestedK = Math.max(env.search.vectorK, skip + limit);
-    const k = Math.min(total, 1000, requestedK);
+    const requestedK = Math.max(env.search.vectorK, (skip + limit) * 3);
+    const k = Math.min(1000, requestedK);
     const body = {
-      size: Math.min(k, total),
+      size: k,
       track_total_hits: false,
       query: buildVectorKnnQuery(embedding, k, filters),
       _source: true,
@@ -798,7 +865,7 @@ export async function semanticSearchProducts(query, { admin = false, requestId }
     const response = await client.search({ index: PRODUCT_INDEX, body });
     const result = responseBody(response);
     const hits = result?.hits?.hits ?? [];
-    const pagedHits = hits.slice(skip, skip + limit);
+    const pagedHits = uniqueSearchHits(hits).slice(skip, skip + limit);
 
     return {
       results: pagedHits.map(toSemanticSearchResult),

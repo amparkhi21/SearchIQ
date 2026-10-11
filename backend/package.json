@@ -23,6 +23,7 @@
     "test:catalog": "node scripts/smoke-test-catalog.mjs",
     "test:ai": "node scripts/smoke-test-ai.mjs",
     "search:reindex": "node src/seed/indexAll.js",
+    "search:reconcile-duplicates": "node scripts/reconcile-search-duplicates.mjs",
     "test:search-index": "node scripts/smoke-test-search-index.mjs",
     "test:search-bm25": "node scripts/smoke-test-bm25.mjs",
     "test:search-semantic": "node scripts/smoke-test-semantic.mjs",

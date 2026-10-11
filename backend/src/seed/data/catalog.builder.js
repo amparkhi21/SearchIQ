@@ -33,7 +33,7 @@ const compact = (object) =>
  */
 export function buildCatalog() {
   const rand = createRandom(20261004);
-  const imageAssignments = loadImageAssignments(); // SKU -> curated, relevance-matched image
+  const imageAssignments = loadImageAssignments(); // SKU -> explicitly verified exact packshot
   const randomInt = (min, max) => min + Math.floor(rand() * (max - min + 1));
 
   const categories = categoryData.map((category, index) => ({
@@ -112,6 +112,10 @@ export function buildCatalog() {
         `${name} from ${brand}. ${line.blurb} ` +
         `Key features: ${line.features.join(', ')}.` +
         (variant ? ` Variant: ${variant}.` : '');
+      const imageAssignment = imageAssignments.get(sku);
+      const verifiedImages = imageAssignment?.verified && imageAssignment.name === name
+        ? [{ ...imageAssignment.image, alt: name }]
+        : [];
 
       products.push({
         name,
@@ -130,7 +134,7 @@ export function buildCatalog() {
         inStock: stock > 0,
         // Never assign a generic category photo as if it represented a specific product.
         // Curated type-matched manifest entries are applied separately; the UI supplies a category fallback.
-        images: imageAssignments.has(sku) ? [imageAssignments.get(sku).image] : [],
+        images: verifiedImages,
         tags,
         attributes: compact({
           color,

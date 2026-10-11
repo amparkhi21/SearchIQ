@@ -1,4 +1,29 @@
 {
-  "note": "Optional hand-verified, exact-product images keyed by SKU. Takes priority over the generated manifest. Example value: { \"url\": \"https://.../photo.jpg\", \"alt\": \"...\", \"source\": \"manufacturer\", \"license\": \"...\" }. The resolver never writes to this file.",
-  "entries": {}
+  "note": "Only manually verified exact product packshots may be used. Key each entry by the stable catalog SKU, include the exact current product name, verified: true, source, and any source/license details. Unverified entries are audit-only and are never stored on products. Automatic stock-photo matching is disabled.",
+  "entries": {
+    "BTY-LAK-003": {
+      "name": "Lakme Eyeconic Kajal",
+      "url": "https://pk-live-21.slatic.net/kf/Sc4b4bb16d0084c459297ed5f001132e6q.jpg",
+      "alt": "Lakme Eyeconic Kajal black pencil and retail pack",
+      "verified": true,
+      "level": "exact",
+      "source": "https://www.daraz.pk/products/lakme-eyeconic-kajal-24hr-lasting-waterproof-smudge-proof-kajal-i781095351.html"
+    },
+    "BTY-MAY-002": {
+      "name": "Maybelline Colossal Kajal",
+      "url": "https://media.naheed.pk/catalog/product/cache/2f2d0cb0c5f92580479e8350be94f387/0/0/000copy_of_03jpg03_-_copy.jpg",
+      "alt": "Maybelline Colossal Kajal pencil and retail pack",
+      "verified": true,
+      "level": "exact",
+      "source": "https://www.naheed.pk/maybelline-new-york-colossal-kajal"
+    },
+    "BTY-LAK-002": {
+      "name": "Lakme 9to5 Matte Lipstick",
+      "url": "https://cdn3.foxy.in/pictures/product/image/53028/110391/lakme-9-to-5-primer-matte-lip-color-mp24-nude-touch.jpg",
+      "alt": "Lakme 9to5 Primer + Matte Lip Color in Nude Touch",
+      "verified": true,
+      "level": "exact",
+      "source": "https://www.foxy.in/products/lakme-9-to-5-primer-matte-lip-color-mp24-nude-touch"
+    }
+  }
 }

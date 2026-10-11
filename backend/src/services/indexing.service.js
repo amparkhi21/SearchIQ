@@ -315,16 +315,20 @@ export async function deleteProductFromIndex(productId, { refresh = 'wait_for' }
   }
 }
 
-async function bulkIndexDocuments(documents) {
-  if (documents.length === 0) return { indexed: 0, failed: 0, errors: [] };
-
-  const client = getOpenSearchClient();
+export function buildBulkIndexBody(documents) {
   const body = [];
-
   for (const document of documents) {
     body.push({ index: { _index: PRODUCT_INDEX, _id: document.productId } });
     body.push(document);
   }
+  return body;
+}
+
+async function bulkIndexDocuments(documents) {
+  if (documents.length === 0) return { indexed: 0, failed: 0, errors: [] };
+
+  const client = getOpenSearchClient();
+  const body = buildBulkIndexBody(documents);
 
   const response = await client.bulk({ body, refresh: 'wait_for' });
   const result = responseBody(response);

@@ -12,6 +12,15 @@ function readEntries(fileUrl) {
   }
 }
 
+export function loadImageRecords() {
+  const manifest = readEntries(MANIFEST_PATH);
+  const overrides = readEntries(OVERRIDES_PATH);
+  return new Map([
+    ...Object.entries(manifest).map(([sku, entry]) => [sku, { ...entry, recordSource: 'manifest' }]),
+    ...Object.entries(overrides).map(([sku, entry]) => [sku, { ...entry, recordSource: 'override' }]),
+  ]);
+}
+
 /** Converts a manifest/override entry into the shape stored in Product.images. */
 export function entryToImage(entry) {
   if (!entry || typeof entry.url !== 'string' || !/^https?:\/\//i.test(entry.url) || entry.url.length > 500) {
@@ -24,19 +33,33 @@ export function entryToImage(entry) {
   return image;
 }
 
+function isVerifiedExactRecord(entry) {
+  return entry?.verified === true
+    && Boolean(String(entry.name ?? '').trim())
+    && Boolean(String(entry.source ?? '').trim())
+    && (entry.recordSource === 'override' || entry.level === 'exact');
+}
+
 /**
- * SKU -> { image, level, name } for every curated product.
- * Hand-verified overrides ("exact") win over generated manifest entries ("type").
+ * Only explicitly verified exact-product packshots are eligible to reach a
+ * catalog record. Type/category search results are retained for audit only.
  */
 export function loadImageAssignments() {
   const assignments = new Map();
-  for (const [sku, entry] of Object.entries(readEntries(MANIFEST_PATH))) {
+  for (const [sku, entry] of loadImageRecords()) {
+    if (!isVerifiedExactRecord(entry)) continue;
     const image = entryToImage(entry);
-    if (image) assignments.set(sku, { image, level: entry.level || 'type', name: entry.name });
-  }
-  for (const [sku, entry] of Object.entries(readEntries(OVERRIDES_PATH))) {
-    const image = entryToImage(entry);
-    if (image) assignments.set(sku, { image, level: 'exact', name: entry.name });
+    if (image) assignments.set(sku, { image, level: 'exact', name: entry.name, verified: true });
   }
   return assignments;
+}
+
+export function loadUnverifiedImageUrls() {
+  const urls = new Set();
+  for (const [sku, entry] of loadImageRecords()) {
+    if (isVerifiedExactRecord(entry)) continue;
+    const image = entryToImage(entry);
+    if (image) urls.add(image.url);
+  }
+  return urls;
 }
